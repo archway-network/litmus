@@ -1,0 +1,28 @@
+[package]
+name = "archway-test-tube"
+version = "0.1.0"
+edition = "2021"
+
+exclude = ["archway", "test_artifacts"]
+
+[features]
+default = []
+wasm-sudo = ["test-tube/wasm-sudo"]
+
+[dependencies]
+test-tube = { version="0.6.0-alpha.1", features = ["module-wrappers"] }
+archway-proto = "0.1.0"
+cosmos-sdk-proto = "0.21.1"
+cosmrs = {version = "0.15.0", features = ["cosmwasm"]}
+cosmwasm-std = "1.4.0"
+osmosis-std = "0.22.0"
+prost = "0.12.3"
+serde = "1.0.144"
+serde_json = "1.0.85"
+
+[dev-dependencies]
+cw1-whitelist = "2.0.0"
+cosmwasm-schema = "2.0.1"
+
+[build-dependencies]
+bindgen = "0.69.1"
