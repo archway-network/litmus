@@ -1,9 +1,9 @@
+use console::Style;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::sync::mpsc::{channel, SendError, Sender};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
-use console::Style;
 
 pub struct Console {
     pub conn: Sender<ConsoleCommand>,
@@ -29,7 +29,7 @@ impl Console {
         self.thread.join().unwrap();
         res
     }
-    
+
     pub fn init_group(&self, name: String) {
         self.send(ConsoleCommand::InitGroup { name }).unwrap()
     }
@@ -55,9 +55,11 @@ fn init_console() -> (Sender<ConsoleCommand>, JoinHandle<()>) {
     let (sender, receiver) = channel::<ConsoleCommand>();
 
     let thread = thread::spawn(move || {
-        let spinner_style = ProgressStyle::with_template("{prefix:.bold.dim} {spinner} [{elapsed_precise}] {wide_msg}")
-            .unwrap()
-            .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
+        let spinner_style = ProgressStyle::with_template(
+            "{prefix:.bold.dim} {spinner} [{elapsed_precise}] {wide_msg}",
+        )
+        .unwrap()
+        .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
         let tick_duration = Duration::from_millis(50);
         let running_style = Style::new().yellow();
         let finished_style = Style::new().green();
@@ -78,32 +80,45 @@ fn init_console() -> (Sender<ConsoleCommand>, JoinHandle<()>) {
 
             match msg {
                 ConsoleCommand::ShutDown => {
-                    main_pb.finish_with_message(format!("Bench: {}", finished_style.apply_to("Done")));
+                    main_pb
+                        .finish_with_message(format!("Bench: {}", finished_style.apply_to("Done")));
                     break;
-                },
+                }
                 ConsoleCommand::InitGroup { name } => {
                     let g = ProgressBar::new(2)
-                        .with_message(format!("| {}: {}", &name, running_style.apply_to("Running")))
+                        .with_message(format!(
+                            "| {}: {}",
+                            &name,
+                            running_style.apply_to("Running")
+                        ))
                         .with_style(spinner_style.clone());
                     g.enable_steady_tick(tick_duration);
 
                     group = Some((name, mp.add(g)))
-                },
+                }
                 ConsoleCommand::FinishGroup => {
                     if let Some((name, g)) = group {
-                        g.finish_with_message(format!("| {}: {}", &name, finished_style.apply_to("Finished")));
+                        g.finish_with_message(format!(
+                            "| {}: {}",
+                            &name,
+                            finished_style.apply_to("Finished")
+                        ));
 
                         group = None;
                     }
-                },
+                }
                 ConsoleCommand::InitBench { name } => {
                     let b = ProgressBar::new(2)
-                        .with_message(format!("| | {}: {}", &name, running_style.apply_to("Running")))
+                        .with_message(format!(
+                            "| | {}: {}",
+                            &name,
+                            running_style.apply_to("Running")
+                        ))
                         .with_style(spinner_style.clone());
                     b.enable_steady_tick(tick_duration);
 
                     bench = Some((name, mp.add(b)))
-                },
+                }
                 ConsoleCommand::BenchMsg { msg } => {
                     if let Some((name, b)) = &bench {
                         b.set_message(format!("| | {}: {}", &name, msg));
@@ -111,11 +126,15 @@ fn init_console() -> (Sender<ConsoleCommand>, JoinHandle<()>) {
                 }
                 ConsoleCommand::FinishBench => {
                     if let Some((name, b)) = bench {
-                        b.finish_with_message(format!("| | {}: {}", &name, finished_style.apply_to("Finished")));
+                        b.finish_with_message(format!(
+                            "| | {}: {}",
+                            &name,
+                            finished_style.apply_to("Finished")
+                        ));
 
                         bench = None;
                     }
-                },
+                }
             }
         }
     });
@@ -144,15 +163,35 @@ mod tests {
         thread::sleep(Duration::from_secs(2));
 
         for _ in 0..4 {
-            console.send(ConsoleCommand::InitGroup { name: "some_group".to_string() }).unwrap();
-            console.send(ConsoleCommand::InitBench { name: "bench_1".to_string()}).unwrap();
-            console.send(ConsoleCommand::BenchMsg { msg: "Initializing".to_string() }).unwrap();
+            console
+                .send(ConsoleCommand::InitGroup {
+                    name: "some_group".to_string(),
+                })
+                .unwrap();
+            console
+                .send(ConsoleCommand::InitBench {
+                    name: "bench_1".to_string(),
+                })
+                .unwrap();
+            console
+                .send(ConsoleCommand::BenchMsg {
+                    msg: "Initializing".to_string(),
+                })
+                .unwrap();
             thread::sleep(Duration::from_secs(2));
             console.send(ConsoleCommand::FinishBench).unwrap();
-            console.send(ConsoleCommand::InitBench { name: "bench_2".to_string()}).unwrap();
+            console
+                .send(ConsoleCommand::InitBench {
+                    name: "bench_2".to_string(),
+                })
+                .unwrap();
             thread::sleep(Duration::from_secs(2));
             console.send(ConsoleCommand::FinishBench).unwrap();
-            console.send(ConsoleCommand::InitBench { name: "bench_3".to_string()}).unwrap();
+            console
+                .send(ConsoleCommand::InitBench {
+                    name: "bench_3".to_string(),
+                })
+                .unwrap();
             thread::sleep(Duration::from_secs(2));
             console.send(ConsoleCommand::FinishBench).unwrap();
             console.send(ConsoleCommand::FinishGroup).unwrap();

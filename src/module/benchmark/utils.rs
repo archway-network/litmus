@@ -97,7 +97,12 @@ impl BenchSaveConfig {
         Self {
             name: "package_version".to_string(),
             file_limit: Some(limit),
-            new_results_name: env!("CARGO_PKG_VERSION").to_string(),
+            new_results_name: format!(
+                "v{}_{}_{}",
+                env!("CARGO_PKG_VERSION_MAJOR"),
+                env!("CARGO_PKG_VERSION_MINOR"),
+                env!("CARGO_PKG_VERSION_PATCH")
+            ),
             file_rotation: None,
         }
     }

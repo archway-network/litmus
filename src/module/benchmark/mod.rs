@@ -333,11 +333,11 @@ macro_rules! harness_main {
 
 #[cfg(test)]
 mod tests {
+    use crate::module::benchmark::console::Console;
     use crate::module::benchmark::{Bench, Setup};
     use crate::tests::netwars_msgs;
     use crate::{arch, ArchwayApp};
     use test_tube::{Account, Module, Wasm};
-    use crate::module::benchmark::console::Console;
 
     fn setup(decimals: &usize, _: &Console) -> Setup<netwars_msgs::ExecuteMsg> {
         let multiplier = 10_i32.pow(*decimals as u32) as u128;
