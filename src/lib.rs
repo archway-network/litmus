@@ -1,5 +1,8 @@
 mod module;
 
+#[cfg(feature = "benchmark")]
+pub use module::benchmark::*;
+
 use crate::module::GovWithAppAccess;
 use cosmos_sdk_proto::Any;
 use cosmwasm_std::Coin;

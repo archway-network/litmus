@@ -1,4 +1,6 @@
+#[cfg(feature = "benchmark")]
 pub mod benchmark;
+
 mod gov;
 
 pub use gov::{Gov, GovWithAppAccess};

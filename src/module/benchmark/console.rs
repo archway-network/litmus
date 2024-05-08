@@ -19,7 +19,7 @@ impl Console {
     pub fn send(&self, msg: ConsoleCommand) -> Result<(), SendError<ConsoleCommand>> {
         let res = self.conn.send(msg);
         // We need to limit how often messages can be sent to avoid duplicated in the progress
-        thread::sleep(Duration::from_millis(10));
+        thread::sleep(Duration::from_millis(100));
         res
     }
 
