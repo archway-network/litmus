@@ -35,7 +35,6 @@ pub struct BenchConfig {
     pub path: String,
     pub name: String,
     pub history: Vec<BenchSaveConfig>,
-    // TODO: add history support
 }
 
 impl BenchConfig {

@@ -1,5 +1,8 @@
+mod console;
 mod results;
 mod utils;
+
+pub use console::{Console, ConsoleCommand};
 
 use crate::module::benchmark::results::{BenchResult, GroupResults};
 use crate::module::benchmark::utils::{BenchConfig, Setup};
@@ -12,19 +15,16 @@ use std::io::{BufReader, BufWriter};
 use std::path::PathBuf;
 use test_tube::{Module, Wasm};
 
-// Running bench:
-// Group: Name
-
 pub struct Bench {
-    // TODO: add a separate thread for the CLI or something
     pub(crate) config: BenchConfig,
+    pub(crate) console: Console,
 }
 
 impl Bench {
     pub fn new() -> Self {
-        println!("Starting bench");
         Self {
             config: Default::default(),
+            console: Console::init(),
         }
     }
 
@@ -32,13 +32,8 @@ impl Bench {
         Group::new(group_name, self)
     }
 
-    pub fn bench<I, M, P>(&mut self, name: impl Into<String>, init: I, params: P)
-    where
-        I: Fn(&P) -> Setup<M>,
-        M: Sized + Serialize,
-    {
-        let mut bench = Group::new(name, self);
-        bench._bench(None::<String>, init, params);
+    pub fn finish(self) {
+        self.console.finish().unwrap();
     }
 }
 
@@ -60,8 +55,8 @@ fn set_ranges(min_gas: &mut u64, max_gas: &mut u64, result: &GroupResults) {
 impl<'a> Group<'a> {
     pub fn new(name: impl Into<String>, bench: &'a mut Bench) -> Self {
         let name = name.into();
-        println!("Running {}", &name);
-        
+        bench.console.init_group(name.clone());
+
         let directory = format!("{}/{}", bench.config.get_path(), &name);
 
         Self {
@@ -76,7 +71,7 @@ impl<'a> Group<'a> {
     pub fn bench<'b, I, M, P>(&'b mut self, name: impl Into<String>, init: I, params: P)
     where
         'a: 'b,
-        I: Fn(&P) -> Setup<M>,
+        I: Fn(&P, &Console) -> Setup<M>,
         M: Sized + Serialize,
     {
         self._bench(Some(name), init, params)
@@ -85,15 +80,14 @@ impl<'a> Group<'a> {
     fn _bench<'b, I, M, P>(&'b mut self, name: Option<impl Into<String>>, init: I, params: P)
     where
         'a: 'b,
-        I: Fn(&P) -> Setup<M>,
+        I: Fn(&P, &Console) -> Setup<M>,
         M: Sized + Serialize,
     {
         let name = name.map(|s| s.into()).unwrap_or("".to_string());
-        
-        println!("Running {}", &name);
-        
+        self.benchmark.console.init_bench(name.clone());
+
         // Run the benchmark
-        let setup: Setup<M> = init(&params);
+        let setup: Setup<M> = init(&params, &self.benchmark.console);
         let wasm = Wasm::new(&setup.app);
         let res = wasm
             .execute(&setup.contract, &setup.msg, &setup.funds, &setup.signer)
@@ -103,12 +97,14 @@ impl<'a> Group<'a> {
             gas_used: res.gas_info.gas_used,
         };
 
-        self.results
-            .insert(name, result);
+        self.results.insert(name, result);
+        self.benchmark.console.finish_bench();
     }
 
     /// Finish the group, this will get automatically called when the Group gets dropped regardless
     pub fn finalize(&mut self) {
+        self.benchmark.console.finish_group();
+
         fn json_file(file: &str) -> String {
             format!("{}.json", file)
         }
@@ -329,6 +325,8 @@ macro_rules! harness_main {
             $(
                 $group(&mut bench);
             )+
+
+            bench.finish();
         }
     }
 }
@@ -339,8 +337,9 @@ mod tests {
     use crate::tests::netwars_msgs;
     use crate::{arch, ArchwayApp};
     use test_tube::{Account, Module, Wasm};
+    use crate::module::benchmark::console::Console;
 
-    fn setup(decimals: &usize) -> Setup<netwars_msgs::ExecuteMsg> {
+    fn setup(decimals: &usize, _: &Console) -> Setup<netwars_msgs::ExecuteMsg> {
         let multiplier = 10_i32.pow(*decimals as u32) as u128;
 
         let app = ArchwayApp::default();

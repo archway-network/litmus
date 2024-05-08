@@ -20,6 +20,8 @@ prost = "0.12.3"
 serde = "1.0.144"
 serde_json = "1.0.85"
 plotters = "0.3.5"
+indicatif = "0.17.8"
+console = "0.15.8"
 
 [dev-dependencies]
 cw1-whitelist = "2.0.0"
