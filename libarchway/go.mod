@@ -183,7 +183,6 @@ require (
 
 exclude github.com/coinbase/rosetta-sdk-go v0.7.9
 
-// TODO: I dont get it
 replace github.com/archway-network/archway => ../archway
 
 replace github.com/cosmos/cosmos-sdk => github.com/archway-network/cosmos-sdk v0.47.5

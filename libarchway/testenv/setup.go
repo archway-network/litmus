@@ -178,7 +178,7 @@ func NewArchwayApp(nodeHome string) *app.ArchwayApp {
 }
 
 func InitChain(appInstance *app.ArchwayApp) (sdk.Context, secp256k1.PrivKey) {
-	sdk.DefaultBondDenom = "uosmo"
+	sdk.DefaultBondDenom = "aarch"
 	genesisState, valPriv := GenesisStateWithValSet(appInstance)
 
 	encCfg := app.MakeEncodingConfig()
@@ -207,8 +207,8 @@ func InitChain(appInstance *app.ArchwayApp) (sdk.Context, secp256k1.PrivKey) {
 		MaxGas:   -1,
 	}
 
-	// replace sdk.DefaultDenom with "uosmo", a bit of a hack, needs improvement
-	stateBytes = []byte(strings.Replace(string(stateBytes), "\"stake\"", "\"uosmo\"", -1))
+	// replace sdk.DefaultDenom with "aarch", a bit of a hack, needs improvement
+	stateBytes = []byte(strings.Replace(string(stateBytes), "\"stake\"", "\"aarch\"", -1))
 
 	appInstance.InitChain(
 		abci.RequestInitChain{
@@ -251,7 +251,7 @@ func (env *TestEnv) BeginNewBlock(executeNextEpoch bool, timeIncreaseSeconds uin
 func (env *TestEnv) FundValidators() {
 	for _, valPriv := range env.ValPrivs {
 		valAddr := sdk.AccAddress(valPriv.PubKey().Address())
-		err := banktestutil.FundAccount(env.App.Keepers.BankKeeper, env.Ctx, valAddr.Bytes(), sdk.NewCoins(sdk.NewInt64Coin("uosmo", 9223372036854775807)))
+		err := banktestutil.FundAccount(env.App.Keepers.BankKeeper, env.Ctx, valAddr.Bytes(), sdk.NewCoins(sdk.NewInt64Coin("aarch", 9223372036854775807)))
 		if err != nil {
 			panic(errors.Wrapf(err, "Failed to fund account"))
 		}
@@ -264,7 +264,7 @@ func (env *TestEnv) InitValidator() []byte {
 	valAddr, _ := validator.GetConsAddr()
 
 	env.ValPrivs = append(env.ValPrivs, valPriv)
-	err := banktestutil.FundAccount(env.App.Keepers.BankKeeper, env.Ctx, valAddrFancy.Bytes(), sdk.NewCoins(sdk.NewInt64Coin("uosmo", 9223372036854775807)))
+	err := banktestutil.FundAccount(env.App.Keepers.BankKeeper, env.Ctx, valAddrFancy.Bytes(), sdk.NewCoins(sdk.NewInt64Coin("aarch", 9223372036854775807)))
 	if err != nil {
 		panic(errors.Wrapf(err, "Failed to fund account"))
 	}

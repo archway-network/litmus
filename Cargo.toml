@@ -1,5 +1,5 @@
 [package]
-name = "archway-test-tube"
+name = "archway_test_tube"
 version = "0.1.0"
 edition = "2021"
 
@@ -14,15 +14,17 @@ test-tube = { version="0.6.0-alpha.1", features = ["module-wrappers"] }
 archway-proto = "0.1.0"
 cosmos-sdk-proto = "0.21.1"
 cosmrs = {version = "0.15.0", features = ["cosmwasm"]}
-cosmwasm-std = "1.4.0"
+cosmwasm-std = "~1.5.0"
 osmosis-std = "0.22.0"
 prost = "0.12.3"
 serde = "1.0.144"
 serde_json = "1.0.85"
+plotters = "0.3.5"
 
 [dev-dependencies]
 cw1-whitelist = "2.0.0"
 cosmwasm-schema = "2.0.1"
+#network-wars = { git = "https://github.com/drewstaylor/fomo", features = ["library"] }
 
 [build-dependencies]
 bindgen = "0.69.1"

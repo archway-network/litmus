@@ -16,9 +16,9 @@ use osmosis_std::types::cosmos::gov::v1beta1::{
 };
 use test_tube::{fn_execute, fn_query, Account, RunnerError, RunnerExecuteResult, SigningAccount};
 
+use crate::ArchwayApp;
 use test_tube::module::Module;
 use test_tube::runner::Runner;
-use crate::ArchwayApp;
 
 pub struct Gov<'a, R: Runner<'a>> {
     runner: &'a R,
@@ -31,8 +31,8 @@ impl<'a, R: Runner<'a>> Module<'a, R> for Gov<'a, R> {
 }
 
 impl<'a, R> Gov<'a, R>
-    where
-        R: Runner<'a>,
+where
+    R: Runner<'a>,
 {
     fn_execute! {
         pub submit_proposal: MsgSubmitProposal["/cosmos.gov.v1beta1.MsgSubmitProposal"] => MsgSubmitProposalResponse
@@ -160,7 +160,9 @@ impl<'a> GovWithAppAccess<'a> {
             .expect("voting period must exist");
 
         // increase time to pass voting period
-        self.app.inner.increase_time(voting_period.seconds as u64 + 1);
+        self.app
+            .inner
+            .increase_time(voting_period.seconds as u64 + 1);
 
         Ok(submit_proposal_res)
     }

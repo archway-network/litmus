@@ -1,10 +1,14 @@
 mod module;
 
+use crate::module::GovWithAppAccess;
 use cosmos_sdk_proto::Any;
+use cosmwasm_std::Coin;
+use osmosis_std::types::cosmos::params::v1beta1::{ParamChange, ParameterChangeProposal};
 use prost::Message;
 use serde::de::DeserializeOwned;
-use test_tube::{BaseApp, FeeSetting, Runner, RunnerExecuteResult, RunnerResult, SigningAccount};
-use cosmwasm_std::Coin;
+use test_tube::{
+    Account, BaseApp, FeeSetting, Runner, RunnerExecuteResult, RunnerResult, SigningAccount,
+};
 
 const FEE_DENOM: &str = "aarch";
 // const ADDRESS_PREFIX: &str = "arch";
@@ -13,6 +17,7 @@ const CHAIN_ID: &str = "archway-1";
 
 const DEFAULT_GAS_ADJUSTMENT: f64 = 1.4;
 const GAS_PRICE: u128 = 900_000_000_000;
+// const GAS_PRICE: u128 = 140_000_000_000;
 
 pub fn aarch(amount: u128) -> Coin {
     Coin::new(amount, FEE_DENOM)
@@ -23,12 +28,37 @@ pub fn arch(amount: u128) -> Coin {
 }
 
 pub struct ArchwayApp {
-    inner: BaseApp
+    inner: BaseApp,
 }
 
 impl ArchwayApp {
     pub fn new() -> Self {
-        ArchwayApp { inner: BaseApp::new(FEE_DENOM, CHAIN_ID, ADDRESS_PREFIX, DEFAULT_GAS_ADJUSTMENT) }
+        let app = ArchwayApp {
+            inner: BaseApp::new(FEE_DENOM, CHAIN_ID, ADDRESS_PREFIX, DEFAULT_GAS_ADJUSTMENT),
+        };
+
+        let proposer = app.init_account(&[arch(100)]).unwrap();
+
+        let gov = GovWithAppAccess::new(&app);
+        gov.propose_and_execute(
+            ParameterChangeProposal::TYPE_URL.to_string(),
+            ParameterChangeProposal {
+                title: "Change gas price to current nets".to_string(),
+                description: "A perfectly descriptive description".to_string(),
+                changes: vec![ParamChange {
+                    subspace: "rewards".to_string(),
+                    key: "MinPriceOfGas".to_string(),
+                    value:
+                        "{ \"denom\": \"aarch\", \"amount\": \"140000000000.000000000000000000\"}"
+                            .to_string(),
+                }],
+            },
+            proposer.address(),
+            &proposer,
+        )
+        .unwrap();
+
+        app
     }
 }
 
@@ -37,19 +67,20 @@ impl ArchwayApp {
     pub fn get_block_time_seconds(&self) -> i64 {
         self.inner.get_block_time_nanos() / 1_000_000_000i64
     }
-    
+
     /// Inits accounts with default fee settings
     pub fn init_account(&self, coins: &[Coin]) -> RunnerResult<SigningAccount> {
-        self.inner.init_account(coins).map(|acc| acc.with_fee_setting(FeeSetting::Auto {
-            gas_price: aarch(GAS_PRICE),
-            gas_adjustment: DEFAULT_GAS_ADJUSTMENT,
-        }))
+        self.inner.init_account(coins).map(|acc| {
+            acc.with_fee_setting(FeeSetting::Auto {
+                gas_price: aarch(GAS_PRICE),
+                gas_adjustment: DEFAULT_GAS_ADJUSTMENT,
+            })
+        })
     }
-    
+
     pub fn init_accounts(&self, coins: &[Coin], count: u64) -> RunnerResult<Vec<SigningAccount>> {
         (0..count).map(|_| self.init_account(coins)).collect()
     }
-
 }
 
 impl Default for ArchwayApp {
@@ -64,9 +95,9 @@ impl<'a> Runner<'a> for ArchwayApp {
         msgs: &[(M, &str)],
         signer: &SigningAccount,
     ) -> RunnerExecuteResult<R>
-        where
-            M: ::prost::Message,
-            R: ::prost::Message + Default,
+    where
+        M: ::prost::Message,
+        R: ::prost::Message + Default,
     {
         self.inner.execute_multiple(msgs, signer)
     }
@@ -76,52 +107,159 @@ impl<'a> Runner<'a> for ArchwayApp {
         msgs: Vec<Any>,
         signer: &SigningAccount,
     ) -> RunnerExecuteResult<R>
-        where
-            R: prost::Message + Default,
+    where
+        R: prost::Message + Default,
     {
         self.inner.execute_multiple_raw(msgs, signer)
     }
 
-    fn execute_multiple_custom_tx<M, R>(&self, msgs: &[(M, &str)], memo: &str, timeout_height: u32, extension_options: Vec<Any>, non_critical_extension_options: Vec<Any>, signer: &SigningAccount) -> RunnerExecuteResult<R> where M: Message, R: Message + Default {
-        self.inner.execute_multiple_custom_tx(msgs, memo, timeout_height, extension_options, non_critical_extension_options, signer)
+    fn execute_multiple_custom_tx<M, R>(
+        &self,
+        msgs: &[(M, &str)],
+        memo: &str,
+        timeout_height: u32,
+        extension_options: Vec<Any>,
+        non_critical_extension_options: Vec<Any>,
+        signer: &SigningAccount,
+    ) -> RunnerExecuteResult<R>
+    where
+        M: Message,
+        R: Message + Default,
+    {
+        self.inner.execute_multiple_custom_tx(
+            msgs,
+            memo,
+            timeout_height,
+            extension_options,
+            non_critical_extension_options,
+            signer,
+        )
     }
 
-    fn execute_multiple_raw_custom_tx<R>(&self, msgs: Vec<Any>, memo: &str, timeout_height: u32, extension_options: Vec<Any>, non_critical_extension_options: Vec<Any>, signer: &SigningAccount) -> RunnerExecuteResult<R> where R: Message + Default {
-        self.inner.execute_multiple_raw_custom_tx(msgs, memo, timeout_height, extension_options, non_critical_extension_options, signer)
+    fn execute_multiple_raw_custom_tx<R>(
+        &self,
+        msgs: Vec<Any>,
+        memo: &str,
+        timeout_height: u32,
+        extension_options: Vec<Any>,
+        non_critical_extension_options: Vec<Any>,
+        signer: &SigningAccount,
+    ) -> RunnerExecuteResult<R>
+    where
+        R: Message + Default,
+    {
+        self.inner.execute_multiple_raw_custom_tx(
+            msgs,
+            memo,
+            timeout_height,
+            extension_options,
+            non_critical_extension_options,
+            signer,
+        )
     }
 
     fn query<Q, R>(&self, path: &str, q: &Q) -> RunnerResult<R>
-        where
-            Q: ::prost::Message,
-            R: ::prost::Message + DeserializeOwned + Default,
+    where
+        Q: ::prost::Message,
+        R: ::prost::Message + DeserializeOwned + Default,
     {
         self.inner.query(path, q)
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use std::option::Option::None;
     use cosmwasm_schema::cw_serde;
+    use std::option::Option::None;
 
-    use cosmwasm_std::{coins, Coin};
+    use cosmwasm_std::{coins, Coin, Uint128};
     use cw1_whitelist::msg::{ExecuteMsg, InstantiateMsg};
     use osmosis_std::types::cosmos::bank::v1beta1::QueryAllBalancesRequest;
     use serde::Serialize;
 
-    use test_tube::Wasm;
     use crate::{aarch, arch, ArchwayApp};
-    use test_tube::Bank;
     use test_tube::account::{Account, FeeSetting};
     use test_tube::module::Module;
     use test_tube::runner::*;
-    
+    use test_tube::Bank;
+    use test_tube::Wasm;
+
+    pub mod netwars_msgs {
+        use cosmwasm_std::{Addr, Uint128};
+        use serde::{Deserialize, Serialize};
+
+        #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+        pub struct InstantiateMsg {
+            pub archid_registry: Option<Addr>,
+            pub expiration: u64,
+            pub min_deposit: Uint128,
+            pub extensions: u64,
+            pub stale: u64,
+            pub reset_length: u64,
+        }
+
+        #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+        #[serde(rename_all = "snake_case")]
+        pub enum ExecuteMsg {
+            Deposit {},
+        }
+    }
+
+    #[test]
+    fn netwars() {
+        let app = ArchwayApp::default();
+        let accounts = app.init_accounts(&vec![arch(100)], 2).unwrap();
+        let admin = accounts.get(0).unwrap();
+        let depositor = accounts.get(0).unwrap();
+
+        let wasm = Wasm::new(&app);
+        let wasm_byte_code = std::fs::read("./test_artifacts/network_wars.wasm").unwrap();
+        let code_id = wasm
+            .store_code(&wasm_byte_code, None, &admin)
+            .unwrap()
+            .data
+            .code_id;
+
+        let contract_addr = wasm
+            .instantiate(
+                code_id,
+                &netwars_msgs::InstantiateMsg {
+                    archid_registry: None,
+                    expiration: 604800,
+                    min_deposit: Uint128::from(1000000000000000000_u128),
+                    extensions: 3600,
+                    stale: 604800,
+                    reset_length: 604800,
+                },
+                Some(&admin.address()),
+                Some("netwars"),
+                &[],
+                &admin,
+            )
+            .unwrap()
+            .data
+            .address;
+
+        let res = wasm
+            .execute(
+                &contract_addr,
+                &netwars_msgs::ExecuteMsg::Deposit {},
+                &[arch(1)],
+                &depositor,
+            )
+            .unwrap();
+        println!("   Chain | Gas Wanted | Gas Used");
+        println!(
+            "TestTube |   {}   | {}",
+            res.gas_info.gas_wanted, res.gas_info.gas_used
+        );
+    }
+
     #[test]
     fn marketplace_test() {
         let app = ArchwayApp::default();
         let admin = app.init_account(&vec![arch(100)]).unwrap();
-        
+
         let wasm = Wasm::new(&app);
         let wasm_byte_code = std::fs::read("./test_artifacts/low_gas_demo.wasm").unwrap();
         let code_id = wasm
@@ -132,7 +270,7 @@ mod tests {
 
         #[derive(Serialize)]
         struct InstMsg {}
-        
+
         let contract_addr = wasm
             .instantiate(
                 code_id,
@@ -149,25 +287,25 @@ mod tests {
         #[cw_serde]
         pub enum ExecMsg {
             Iterate { iterations: u64 },
-            EmptyLoad { },
+            EmptyLoad {},
         }
-        
-        let res = wasm.execute::<ExecMsg>(
-            &contract_addr,
-            &ExecMsg::EmptyLoad {},
-            &[],
-            &admin,
-        )
+
+        let res = wasm
+            .execute::<ExecMsg>(&contract_addr, &ExecMsg::EmptyLoad {}, &[], &admin)
             .unwrap();
         println!("   Chain | Gas Wanted | Gas Used");
         println!("TestNet  |   187574   | 185786");
-        println!("TestTube |   {}   | {}", res.gas_info.gas_wanted, res.gas_info.gas_used);
+        println!(
+            "TestTube |   {}   | {}",
+            res.gas_info.gas_wanted, res.gas_info.gas_used
+        );
     }
-    
+
     #[test]
     fn test_init_accounts() {
         let app = ArchwayApp::default();
-        let accounts = app.inner
+        let accounts = app
+            .inner
             .init_accounts(&coins(100_000_000_000, "aarch"), 3)
             .unwrap();
 
@@ -197,11 +335,12 @@ mod tests {
     fn test_get_block_height() {
         let app = ArchwayApp::default();
 
-        assert_eq!(app.inner.get_block_height(), 1i64);
+        // Governance transactions fix
+        assert_eq!(app.inner.get_block_height(), 5i64);
 
         app.inner.increase_time(10u64);
 
-        assert_eq!(app.inner.get_block_height(), 2i64);
+        assert_eq!(app.inner.get_block_height(), 6i64);
     }
 
     #[test]
@@ -209,7 +348,8 @@ mod tests {
         use cw1_whitelist::msg::*;
 
         let app = ArchwayApp::default();
-        let accs = app.inner
+        let accs = app
+            .inner
             .init_accounts(
                 &[
                     Coin::new(1_000_000_000_000, "uatom"),
@@ -263,7 +403,7 @@ mod tests {
             &[],
             admin,
         )
-            .unwrap();
+        .unwrap();
 
         let admin_list = wasm
             .query::<QueryMsg, AdminListResponse>(&contract_addr, &QueryMsg::AdminList {})
@@ -277,8 +417,14 @@ mod tests {
     fn test_custom_fee() {
         let app = ArchwayApp::default();
         let initial_balance = 1_000_000_000_000;
-        let alice = app.inner.init_account(&coins(initial_balance, "aarch")).unwrap();
-        let bob = app.inner.init_account(&coins(initial_balance, "aarch")).unwrap();
+        let alice = app
+            .inner
+            .init_account(&coins(initial_balance, "aarch"))
+            .unwrap();
+        let bob = app
+            .inner
+            .init_account(&coins(initial_balance, "aarch"))
+            .unwrap();
 
         let amount = Coin::new(1_000_000, "aarch");
         let gas_limit = 100_000_000;
