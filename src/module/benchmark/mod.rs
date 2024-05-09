@@ -3,9 +3,9 @@ mod results;
 mod utils;
 
 pub use console::{Console, ConsoleCommand};
+pub use utils::*;
 
 use crate::module::benchmark::results::{BenchResult, GroupResults};
-use crate::module::benchmark::utils::{BenchConfig, Setup};
 use plotters::prelude::*;
 use serde::Serialize;
 use std::collections::BTreeMap;
