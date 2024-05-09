@@ -5,7 +5,7 @@ pub use module::benchmark::*;
 
 use crate::module::GovWithAppAccess;
 use cosmos_sdk_proto::Any;
-use cosmwasm_std::Coin;
+use cosmwasm_std::{Coin, CosmosMsg};
 use osmosis_std::types::cosmos::params::v1beta1::{ParamChange, ParameterChangeProposal};
 use prost::Message;
 use serde::de::DeserializeOwned;
@@ -117,49 +117,28 @@ impl<'a> Runner<'a> for ArchwayApp {
         self.inner.execute_multiple_raw(msgs, signer)
     }
 
-    fn execute_multiple_custom_tx<M, R>(
+    fn execute_cosmos_msgs<S>(
         &self,
-        msgs: &[(M, &str)],
-        memo: &str,
-        timeout_height: u32,
-        extension_options: Vec<Any>,
-        non_critical_extension_options: Vec<Any>,
+        msgs: &[CosmosMsg],
+        signer: &SigningAccount,
+    ) -> RunnerExecuteResult<S>
+    where
+        S: Message + Default,
+    {
+        self.inner.execute_cosmos_msgs(msgs, signer)
+    }
+
+    fn execute<M, R>(
+        &self,
+        msg: M,
+        type_url: &str,
         signer: &SigningAccount,
     ) -> RunnerExecuteResult<R>
     where
         M: Message,
         R: Message + Default,
     {
-        self.inner.execute_multiple_custom_tx(
-            msgs,
-            memo,
-            timeout_height,
-            extension_options,
-            non_critical_extension_options,
-            signer,
-        )
-    }
-
-    fn execute_multiple_raw_custom_tx<R>(
-        &self,
-        msgs: Vec<Any>,
-        memo: &str,
-        timeout_height: u32,
-        extension_options: Vec<Any>,
-        non_critical_extension_options: Vec<Any>,
-        signer: &SigningAccount,
-    ) -> RunnerExecuteResult<R>
-    where
-        R: Message + Default,
-    {
-        self.inner.execute_multiple_raw_custom_tx(
-            msgs,
-            memo,
-            timeout_height,
-            extension_options,
-            non_critical_extension_options,
-            signer,
-        )
+        self.inner.execute(msg, type_url, signer)
     }
 
     fn query<Q, R>(&self, path: &str, q: &Q) -> RunnerResult<R>

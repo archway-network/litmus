@@ -11,7 +11,8 @@ benchmark = ["plotters", "indicatif", "console"]
 wasm-sudo = ["test-tube/wasm-sudo"]
 
 [dependencies]
-test-tube = { version="0.6.0-alpha.1", features = ["module-wrappers"] }
+# Using local branch while test-tubes until the source stops making breaking changes
+test-tube = { git ="https://github.com/FloppyDisck/test-tube.git", features = ["module-wrappers"] }
 archway-proto = "0.1.0"
 cosmos-sdk-proto = "0.21.1"
 cosmrs = {version = "0.15.0", features = ["cosmwasm"]}
