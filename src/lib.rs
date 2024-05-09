@@ -9,6 +9,7 @@ use cosmwasm_std::Coin;
 use osmosis_std::types::cosmos::params::v1beta1::{ParamChange, ParameterChangeProposal};
 use prost::Message;
 use serde::de::DeserializeOwned;
+pub use test_tube;
 use test_tube::{
     Account, BaseApp, FeeSetting, Runner, RunnerExecuteResult, RunnerResult, SigningAccount,
 };
