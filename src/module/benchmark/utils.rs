@@ -47,7 +47,7 @@ impl Default for BenchConfig {
     fn default() -> Self {
         Self {
             // Samples do not vary per execution
-            path: "./target/".to_string(),
+            path: "./".to_string(),
             name: "test_tube_bench".to_string(),
             history: vec![BenchSaveConfig::save_last()],
         }
