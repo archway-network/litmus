@@ -325,6 +325,13 @@ impl<'a> Group<'a> {
                             }
                         }
                     }
+                    
+                    // Sort iterative items to prevent malformed lines
+                    if self.is_iterative {
+                        items.sort_by(|(a, _), (b, _)| {
+                            a.partial_cmp(b).unwrap()
+                        });
+                    }
 
                     ctx.draw_series(LineSeries::new(items, color.stroke_width(3)).point_size(2))
                         .unwrap()
