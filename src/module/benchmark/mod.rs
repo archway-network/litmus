@@ -16,7 +16,7 @@ use std::path::PathBuf;
 use test_tube::{Module, Wasm};
 
 pub struct Bench {
-    pub(crate) config: BenchConfig,
+    pub config: BenchConfig,
     pub(crate) console: Console,
 }
 
@@ -26,6 +26,10 @@ impl Bench {
             config: Default::default(),
             console: Console::init(),
         }
+    }
+    
+    pub fn set_history(&mut self, history: Vec<BenchSaveConfig>) {
+        self.config.history = history;
     }
 
     pub fn group(&mut self, group_name: impl Into<String>) -> Group {
