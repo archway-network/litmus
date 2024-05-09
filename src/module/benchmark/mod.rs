@@ -46,6 +46,7 @@ pub struct Group<'a> {
     name: String,
     directory: String,
     results: GroupResults,
+    is_iterative: bool,
     finished: bool,
 }
 
@@ -68,20 +69,35 @@ impl<'a> Group<'a> {
             name,
             directory,
             results: Default::default(),
+            is_iterative: false,
             finished: false,
         }
     }
 
+    /// Benchmarks that solely rely on a single value change should go here, making graphs more accurate
+    pub fn iter_bench<'b, I, M>(&'b mut self, init: I, iter: Vec<usize>)
+        where
+            'a: 'b,
+            I: Fn(&usize, &Console) -> Setup<M>,
+            M: Sized + Serialize,
+    {
+        self.is_iterative = true;
+        for i in iter {
+            self._bench(Some(i.to_string()), &init, i)
+        }
+    }
+    
+    /// Benchmarks that cannot be expressed with simple numeric values should go here, giving them a concise description
     pub fn bench<'b, I, M, P>(&'b mut self, name: impl Into<String>, init: I, params: P)
     where
         'a: 'b,
         I: Fn(&P, &Console) -> Setup<M>,
         M: Sized + Serialize,
     {
-        self._bench(Some(name), init, params)
+        self._bench(Some(name), &init, params)
     }
 
-    fn _bench<'b, I, M, P>(&'b mut self, name: Option<impl Into<String>>, init: I, params: P)
+    fn _bench<'b, I, M, P>(&'b mut self, name: Option<impl Into<String>>, init: &I, params: P)
     where
         'a: 'b,
         I: Fn(&P, &Console) -> Setup<M>,
@@ -106,7 +122,7 @@ impl<'a> Group<'a> {
     }
 
     /// Finish the group, this will get automatically called when the Group gets dropped regardless
-    pub fn finalize(&mut self) {
+    pub fn finalize(&mut self, x_label: Option<&str>) {
         self.benchmark.console.finish_group();
 
         fn json_file(file: &str) -> String {
@@ -264,25 +280,35 @@ impl<'a> Group<'a> {
                     .set_label_area_size(LabelAreaPosition::Bottom, 40)
                     .caption(&self.name, ("sans-serif", 40))
                     .build_cartesian_2d(
-                        //labels.as_slice().into_segmented(),
-                        0..labels.len(), // Temp Fix
+                        if self.is_iterative {
+                            // Get the true X size
+                            0..(labels.iter().map(|l| l.parse::<usize>().unwrap()).max().unwrap() + 1)
+                        } else {
+                            // Enumerate the labels since there is no discernible distance between them
+                            0..labels.len()
+                        },
                         y_spec,
                         // (min_gas..max_gas),
                     )
                     .unwrap();
 
                 // TODO: currently having labels with spaces breaks this
-                ctx.configure_mesh()
-                    .x_desc("Group_Bench")
-                    .y_desc("Gas_Used")
-                    .x_label_formatter(&|x| {
+                let mut mesh = ctx.configure_mesh();
+                
+                mesh.x_desc(x_label.unwrap_or("Group_Bench"))
+                    .y_desc("Gas_Used");
+                
+                // Display label names for the x coordinate
+                if !self.is_iterative {
+                    mesh.x_label_formatter(&|x| {
                         labels
                             .get(*x)
                             .map(|s| s.to_string())
                             .unwrap_or("".to_string())
-                    })
-                    .draw()
-                    .unwrap();
+                    }).draw().unwrap();
+                } else {
+                    mesh.draw().unwrap();
+                }
 
                 for (idx, (key, value)) in all_results.iter().enumerate() {
                     let color = Palette99::pick(idx).mix(0.9);
@@ -291,8 +317,12 @@ impl<'a> Group<'a> {
                     // let items = value.iter().map(|(name, data)| (name, data.gas_used));
                     let mut items = vec![];
                     for (name, data) in value.iter() {
-                        if let Some(idx) = labels.iter().position(|l| l == name) {
-                            items.push((idx, data.gas_used));
+                        if self.is_iterative {
+                            items.push((name.parse::<usize>().unwrap(), data.gas_used));
+                        } else {
+                            if let Some(idx) = labels.iter().position(|l| l == name) {
+                                items.push((idx, data.gas_used));
+                            }
                         }
                     }
 
@@ -321,7 +351,7 @@ impl<'a> Group<'a> {
 
 impl<'a> Drop for Group<'a> {
     fn drop(&mut self) {
-        self.finalize()
+        self.finalize(None)
     }
 }
 
@@ -403,10 +433,19 @@ mod tests {
         }
     }
 
+    fn test_iter_group(bench: &mut Bench) {
+        // bench.bench("singular_bench", setup, 1);
+
+        let mut group = bench.group("iter_amounts_test");
+
+        group.iter_bench(setup, (1..10).collect())
+    }
+
     #[test]
     fn test_main() {
         let mut bench = Bench::new();
 
         test_group(&mut bench);
+        test_iter_group(&mut bench);
     }
 }
