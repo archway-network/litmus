@@ -133,12 +133,17 @@ impl<'a> Group<'a> {
 
                     // Load file config
                     config_path.push("config.json");
-                    let file = File::open(&config_path).unwrap();
+                    
+                    
 
-                    let mut file_config: Vec<String> =
-                        serde_json::from_reader(BufReader::new(&file)).unwrap();
+                    let (file, mut file_config) = if let Some(file) = File::open(&config_path).ok() {
+                        let cfg: Vec<String> = serde_json::from_reader(BufReader::new(&file)).unwrap();
+                        (file, cfg)
+                    } else {
+                        (File::create(&config_path).unwrap(), vec![])
+                    };
 
-                    // Remove the last item until were under the file limit
+                    // Remove the first item until were under the file limit
                     while file_config.len() >= file_limit {
                         res_path.push(file_config.remove(0));
                         fs::remove_file(&res_path).unwrap();
