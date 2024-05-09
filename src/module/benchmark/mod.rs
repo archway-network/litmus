@@ -320,7 +320,7 @@ impl<'a> Drop for Group<'a> {
 macro_rules! harness_main {
     ( $( $group:path ),+ $(,)* ) => {
         fn main() {
-            let mut bench = $archway_test_tube::benchmark::Bench::new();
+            let mut bench = archway_test_tube::Bench::new();
 
             $(
                 $group(&mut bench);
