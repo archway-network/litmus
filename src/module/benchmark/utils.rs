@@ -35,6 +35,8 @@ pub struct BenchConfig {
     pub path: String,
     pub name: String,
     pub history: Vec<BenchSaveConfig>,
+    /// When false, it will display every single bench available, may cause issues
+    pub truncate_benches: bool,
 }
 
 impl BenchConfig {
@@ -50,6 +52,7 @@ impl Default for BenchConfig {
             path: "./".to_string(),
             name: "test_tube_bench".to_string(),
             history: vec![BenchSaveConfig::save_last()],
+            truncate_benches: true,
         }
     }
 }

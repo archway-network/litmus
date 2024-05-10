@@ -46,6 +46,10 @@ impl Console {
         self.send(ConsoleCommand::BenchMsg { msg }).unwrap()
     }
 
+    pub fn set_truncated(&self) {
+        self.send(ConsoleCommand::TruncateBenches {}).unwrap()
+    }
+
     pub fn finish_bench(&self) {
         self.send(ConsoleCommand::FinishBench).unwrap()
     }
@@ -72,19 +76,26 @@ fn init_console() -> (Sender<ConsoleCommand>, JoinHandle<()>) {
         main_pb.enable_steady_tick(tick_duration);
         let main_pb = mp.add(main_pb);
 
+        let mut truncate_benches = false;
+        // Define when a new truncated bench should start
+        let mut new_bench = true;
         let mut group = None;
-        let mut bench = None;
+        let mut bench: Option<(String, ProgressBar)> = None;
 
         loop {
             let msg = receiver.recv().unwrap();
 
             match msg {
+                ConsoleCommand::TruncateBenches {} => {
+                    truncate_benches = true;
+                }
                 ConsoleCommand::ShutDown => {
                     main_pb
                         .finish_with_message(format!("Bench: {}", finished_style.apply_to("Done")));
                     break;
                 }
                 ConsoleCommand::InitGroup { name } => {
+                    new_bench = true;
                     let g = ProgressBar::new(2)
                         .with_message(format!(
                             "| {}: {}",
@@ -104,20 +115,45 @@ fn init_console() -> (Sender<ConsoleCommand>, JoinHandle<()>) {
                             finished_style.apply_to("Finished")
                         ));
 
+                        if truncate_benches {
+                            if let Some((_, b)) = &bench {
+                                b.finish_with_message(format!(
+                                    "| | Benches: {}",
+                                    finished_style.apply_to("Finished")
+                                ));
+
+                                bench = None;
+                            }
+                        }
+
                         group = None;
                     }
                 }
                 ConsoleCommand::InitBench { name } => {
-                    let b = ProgressBar::new(2)
-                        .with_message(format!(
-                            "| | {}: {}",
-                            &name,
-                            running_style.apply_to("Running")
-                        ))
-                        .with_style(spinner_style.clone());
-                    b.enable_steady_tick(tick_duration);
+                    // Create a new bench if either were not truncating or were truncating and theres a new group
+                    if (truncate_benches && new_bench) || !truncate_benches {
+                        let b = ProgressBar::new(2)
+                            .with_message(format!(
+                                "| | {}: {}",
+                                &name,
+                                running_style.apply_to("Running")
+                            ))
+                            .with_style(spinner_style.clone());
+                        b.enable_steady_tick(tick_duration);
 
-                    bench = Some((name, mp.add(b)))
+                        new_bench = false;
+                        bench = Some((name, mp.add(b)))
+                    } else {
+                        if let Some((_, b)) = &bench {
+                            b.set_message(format!(
+                                "| | {}: {}",
+                                &name,
+                                running_style.apply_to("Running")
+                            ))
+                        }
+                        // Change bench name
+                        bench = bench.map(|(_, b)| (name, b));
+                    }
                 }
                 ConsoleCommand::BenchMsg { msg } => {
                     if let Some((name, b)) = &bench {
@@ -125,14 +161,22 @@ fn init_console() -> (Sender<ConsoleCommand>, JoinHandle<()>) {
                     }
                 }
                 ConsoleCommand::FinishBench => {
-                    if let Some((name, b)) = bench {
-                        b.finish_with_message(format!(
-                            "| | {}: {}",
-                            &name,
-                            finished_style.apply_to("Finished")
-                        ));
+                    if let Some((name, b)) = &bench {
+                        if truncate_benches {
+                            b.set_message(format!(
+                                "| | {}: {}",
+                                &name,
+                                finished_style.apply_to("Finished")
+                            ));
+                        } else {
+                            b.finish_with_message(format!(
+                                "| | {}: {}",
+                                &name,
+                                finished_style.apply_to("Finished")
+                            ));
 
-                        bench = None;
+                            bench = None;
+                        }
                     }
                 }
             }
@@ -145,6 +189,7 @@ fn init_console() -> (Sender<ConsoleCommand>, JoinHandle<()>) {
 pub enum ConsoleCommand {
     ShutDown,
     InitGroup { name: String },
+    TruncateBenches {},
     InitBench { name: String },
     BenchMsg { msg: String },
     FinishGroup,
@@ -160,6 +205,7 @@ mod tests {
     #[test]
     fn test_run() {
         let console = Console::init();
+        console.set_truncated();
         thread::sleep(Duration::from_secs(2));
 
         for _ in 0..4 {

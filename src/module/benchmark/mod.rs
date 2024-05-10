@@ -22,12 +22,17 @@ pub struct Bench {
 
 impl Bench {
     pub fn new() -> Self {
-        Self {
-            config: Default::default(),
-            console: Console::init(),
-        }
+        Self::with_config(Default::default())
     }
-    
+
+    pub fn with_config(config: BenchConfig) -> Self {
+        let console = Console::init();
+        if config.truncate_benches {
+            console.set_truncated();
+        }
+        Self { config, console }
+    }
+
     pub fn set_history(&mut self, history: Vec<BenchSaveConfig>) {
         self.config.history = history;
     }
@@ -76,17 +81,17 @@ impl<'a> Group<'a> {
 
     /// Benchmarks that solely rely on a single value change should go here, making graphs more accurate
     pub fn iter_bench<'b, I, M>(&'b mut self, init: I, iter: Vec<usize>)
-        where
-            'a: 'b,
-            I: Fn(&usize, &Console) -> Setup<M>,
-            M: Sized + Serialize,
+    where
+        'a: 'b,
+        I: Fn(&usize, &Console) -> Setup<M>,
+        M: Sized + Serialize,
     {
         self.is_iterative = true;
         for i in iter {
             self._bench(Some(i.to_string()), &init, i)
         }
     }
-    
+
     /// Benchmarks that cannot be expressed with simple numeric values should go here, giving them a concise description
     pub fn bench<'b, I, M, P>(&'b mut self, name: impl Into<String>, init: I, params: P)
     where
@@ -149,11 +154,11 @@ impl<'a> Group<'a> {
 
                     // Load file config
                     config_path.push("config.json");
-                    
-                    
 
-                    let (file, mut file_config) = if let Some(file) = File::open(&config_path).ok() {
-                        let cfg: Vec<String> = serde_json::from_reader(BufReader::new(&file)).unwrap();
+                    let (file, mut file_config) = if let Some(file) = File::open(&config_path).ok()
+                    {
+                        let cfg: Vec<String> =
+                            serde_json::from_reader(BufReader::new(&file)).unwrap();
                         (file, cfg)
                     } else {
                         (File::create(&config_path).unwrap(), vec![])
@@ -282,7 +287,12 @@ impl<'a> Group<'a> {
                     .build_cartesian_2d(
                         if self.is_iterative {
                             // Get the true X size
-                            0..(labels.iter().map(|l| l.parse::<usize>().unwrap()).max().unwrap() + 1)
+                            0..(labels
+                                .iter()
+                                .map(|l| l.parse::<usize>().unwrap())
+                                .max()
+                                .unwrap()
+                                + 1)
                         } else {
                             // Enumerate the labels since there is no discernible distance between them
                             0..labels.len()
@@ -294,10 +304,10 @@ impl<'a> Group<'a> {
 
                 // TODO: currently having labels with spaces breaks this
                 let mut mesh = ctx.configure_mesh();
-                
+
                 mesh.x_desc(x_label.unwrap_or("Group_Bench"))
                     .y_desc("Gas_Used");
-                
+
                 // Display label names for the x coordinate
                 if !self.is_iterative {
                     mesh.x_label_formatter(&|x| {
@@ -305,7 +315,9 @@ impl<'a> Group<'a> {
                             .get(*x)
                             .map(|s| s.to_string())
                             .unwrap_or("".to_string())
-                    }).draw().unwrap();
+                    })
+                    .draw()
+                    .unwrap();
                 } else {
                     mesh.draw().unwrap();
                 }
@@ -325,12 +337,10 @@ impl<'a> Group<'a> {
                             }
                         }
                     }
-                    
+
                     // Sort iterative items to prevent malformed lines
                     if self.is_iterative {
-                        items.sort_by(|(a, _), (b, _)| {
-                            a.partial_cmp(b).unwrap()
-                        });
+                        items.sort_by(|(a, _), (b, _)| a.partial_cmp(b).unwrap());
                     }
 
                     ctx.draw_series(LineSeries::new(items, color.stroke_width(3)).point_size(2))
