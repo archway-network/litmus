@@ -13,14 +13,14 @@ wasm-sudo = ["test-tube/wasm-sudo"]
 [dependencies]
 # Using local branch while test-tubes until the source stops making breaking changes
 test-tube = { git ="https://github.com/FloppyDisck/test-tube.git", features = ["module-wrappers"] }
-archway-proto = "0.1.0"
-cosmos-sdk-proto = "0.21.1"
-cosmrs = {version = "0.15.0", features = ["cosmwasm"]}
-cosmwasm-std = "~1.5.0"
-osmosis-std = "0.22.0"
-prost = "0.12.3"
-serde = "1.0.144"
-serde_json = "1.0.85"
+archway-proto = "=0.1.0"
+cosmos-sdk-proto = "=0.21.1"
+cosmrs = {version = "=0.15.0", features = ["cosmwasm"]}
+cosmwasm-std = "^1.2"
+osmosis-std = "=0.22.0"
+prost = "^0.12.3"
+serde = "^1.0"
+serde_json = "^1.0"
 plotters = { version = "0.3.5", optional = true }
 indicatif = { version = "0.17.8", optional = true }
 console = { version = "0.15.8", optional = true }
