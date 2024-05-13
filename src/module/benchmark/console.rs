@@ -83,102 +83,105 @@ fn init_console() -> (Sender<ConsoleCommand>, JoinHandle<()>) {
         let mut bench: Option<(String, ProgressBar)> = None;
 
         loop {
-            let msg = receiver.recv().unwrap();
+            if let Some(msg) = receiver.recv().ok() {
+                match msg {
+                    ConsoleCommand::TruncateBenches {} => {
+                        truncate_benches = true;
+                    }
+                    ConsoleCommand::ShutDown => {
+                        main_pb
+                            .finish_with_message(format!("Bench: {}", finished_style.apply_to("Done")));
+                        break;
+                    }
+                    ConsoleCommand::InitGroup { name } => {
+                        new_bench = true;
+                        let g = ProgressBar::new(2)
+                            .with_message(format!(
+                                "| {}: {}",
+                                &name,
+                                running_style.apply_to("Running")
+                            ))
+                            .with_style(spinner_style.clone());
+                        g.enable_steady_tick(tick_duration);
 
-            match msg {
-                ConsoleCommand::TruncateBenches {} => {
-                    truncate_benches = true;
-                }
-                ConsoleCommand::ShutDown => {
-                    main_pb
-                        .finish_with_message(format!("Bench: {}", finished_style.apply_to("Done")));
-                    break;
-                }
-                ConsoleCommand::InitGroup { name } => {
-                    new_bench = true;
-                    let g = ProgressBar::new(2)
-                        .with_message(format!(
-                            "| {}: {}",
-                            &name,
-                            running_style.apply_to("Running")
-                        ))
-                        .with_style(spinner_style.clone());
-                    g.enable_steady_tick(tick_duration);
+                        group = Some((name, mp.add(g)))
+                    }
+                    ConsoleCommand::FinishGroup => {
+                        if let Some((name, g)) = group {
+                            g.finish_with_message(format!(
+                                "| {}: {}",
+                                &name,
+                                finished_style.apply_to("Finished")
+                            ));
 
-                    group = Some((name, mp.add(g)))
-                }
-                ConsoleCommand::FinishGroup => {
-                    if let Some((name, g)) = group {
-                        g.finish_with_message(format!(
-                            "| {}: {}",
-                            &name,
-                            finished_style.apply_to("Finished")
-                        ));
+                            if truncate_benches {
+                                if let Some((_, b)) = &bench {
+                                    b.finish_with_message(format!(
+                                        "| | Benches: {}",
+                                        finished_style.apply_to("Finished")
+                                    ));
 
-                        if truncate_benches {
+                                    bench = None;
+                                }
+                            }
+
+                            group = None;
+                        }
+                    }
+                    ConsoleCommand::InitBench { name } => {
+                        // Create a new bench if either were not truncating or were truncating and theres a new group
+                        if (truncate_benches && new_bench) || !truncate_benches {
+                            let b = ProgressBar::new(2)
+                                .with_message(format!(
+                                    "| | {}: {}",
+                                    &name,
+                                    running_style.apply_to("Running")
+                                ))
+                                .with_style(spinner_style.clone());
+                            b.enable_steady_tick(tick_duration);
+
+                            new_bench = false;
+                            bench = Some((name, mp.add(b)))
+                        } else {
                             if let Some((_, b)) = &bench {
+                                b.set_message(format!(
+                                    "| | {}: {}",
+                                    &name,
+                                    running_style.apply_to("Running")
+                                ))
+                            }
+                            // Change bench name
+                            bench = bench.map(|(_, b)| (name, b));
+                        }
+                    }
+                    ConsoleCommand::BenchMsg { msg } => {
+                        if let Some((name, b)) = &bench {
+                            b.set_message(format!("| | {}: {}", &name, msg));
+                        }
+                    }
+                    ConsoleCommand::FinishBench => {
+                        if let Some((name, b)) = &bench {
+                            if truncate_benches {
+                                b.set_message(format!(
+                                    "| | {}: {}",
+                                    &name,
+                                    finished_style.apply_to("Finished")
+                                ));
+                            } else {
                                 b.finish_with_message(format!(
-                                    "| | Benches: {}",
+                                    "| | {}: {}",
+                                    &name,
                                     finished_style.apply_to("Finished")
                                 ));
 
                                 bench = None;
                             }
                         }
-
-                        group = None;
                     }
                 }
-                ConsoleCommand::InitBench { name } => {
-                    // Create a new bench if either were not truncating or were truncating and theres a new group
-                    if (truncate_benches && new_bench) || !truncate_benches {
-                        let b = ProgressBar::new(2)
-                            .with_message(format!(
-                                "| | {}: {}",
-                                &name,
-                                running_style.apply_to("Running")
-                            ))
-                            .with_style(spinner_style.clone());
-                        b.enable_steady_tick(tick_duration);
-
-                        new_bench = false;
-                        bench = Some((name, mp.add(b)))
-                    } else {
-                        if let Some((_, b)) = &bench {
-                            b.set_message(format!(
-                                "| | {}: {}",
-                                &name,
-                                running_style.apply_to("Running")
-                            ))
-                        }
-                        // Change bench name
-                        bench = bench.map(|(_, b)| (name, b));
-                    }
-                }
-                ConsoleCommand::BenchMsg { msg } => {
-                    if let Some((name, b)) = &bench {
-                        b.set_message(format!("| | {}: {}", &name, msg));
-                    }
-                }
-                ConsoleCommand::FinishBench => {
-                    if let Some((name, b)) = &bench {
-                        if truncate_benches {
-                            b.set_message(format!(
-                                "| | {}: {}",
-                                &name,
-                                finished_style.apply_to("Finished")
-                            ));
-                        } else {
-                            b.finish_with_message(format!(
-                                "| | {}: {}",
-                                &name,
-                                finished_style.apply_to("Finished")
-                            ));
-
-                            bench = None;
-                        }
-                    }
-                }
+            }
+            else {
+                break
             }
         }
     });
