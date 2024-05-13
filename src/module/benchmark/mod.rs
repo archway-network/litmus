@@ -168,8 +168,6 @@ impl<'a> Group<'a> {
 
     /// Finish the group, this will get automatically called when the Group gets dropped regardless
     pub fn finalize(&mut self, x_label: Option<&str>) {
-        self.benchmark.console.finish_group();
-
         fn json_file(file: &str) -> String {
             format!("{}.json", file)
         }
@@ -179,6 +177,8 @@ impl<'a> Group<'a> {
         let mut max_gas = 0;
 
         if !self.finished {
+            self.benchmark.console.finish_group();
+            
             for config in self.benchmark.config.history.iter() {
                 let mut config_path = PathBuf::from(&self.directory);
                 config_path.push(&config.name);
