@@ -78,7 +78,7 @@ impl<'a> Group<'a> {
             finished: false,
         }
     }
-
+    
     /// Benchmarks that solely rely on a single value change should go here, making graphs more accurate
     pub fn iter_bench<'b, I, M>(&'b mut self, init: I, iter: Vec<usize>)
     where
@@ -88,7 +88,32 @@ impl<'a> Group<'a> {
     {
         self.is_iterative = true;
         for i in iter {
-            self._bench(Some(i.to_string()), &init, i)
+            self._stateless_bench(Some(i.to_string()), &init, i)
+        }
+    }
+
+    /// Like iter bench but implements a continuous App for faster setup
+    pub fn stateful_iter_bench<'b, I, U, S, M>(&'b mut self, init: I, update: U, iter: Vec<usize>)
+        where
+            'a: 'b,
+            // Init function
+            I: Fn(&Console) -> (Setup<M>, S),
+            // Last, current, console and init setup results
+            U: Fn(Option<usize>, usize, &Console, &mut S, &mut Setup<M>),
+            M: Sized + Serialize,
+    {
+        self.is_iterative = true;
+        let (mut setup, mut state) = init(&self.benchmark.console);
+        let mut last = None;
+        for current in iter {
+            let name = self._init_bench(Some(current.to_string()));
+            
+            // Update the state
+            update(last, current, &self.benchmark.console, &mut state, &mut setup);
+            last = Some(current);
+
+            // Run the benchmark
+            self._bench_msg(name, &setup);
         }
     }
 
@@ -99,20 +124,22 @@ impl<'a> Group<'a> {
         I: Fn(&P, &Console) -> Setup<M>,
         M: Sized + Serialize,
     {
-        self._bench(Some(name), &init, params)
+        self._stateless_bench(Some(name), &init, params)
     }
 
-    fn _bench<'b, I, M, P>(&'b mut self, name: Option<impl Into<String>>, init: &I, params: P)
-    where
-        'a: 'b,
-        I: Fn(&P, &Console) -> Setup<M>,
-        M: Sized + Serialize,
-    {
+    /// Initialize bench related info
+    fn _init_bench(&mut self, name: Option<impl Into<String>>) -> String {
         let name = name.map(|s| s.into()).unwrap_or("".to_string());
         self.benchmark.console.init_bench(name.clone());
-
-        // Run the benchmark
-        let setup: Setup<M> = init(&params, &self.benchmark.console);
+        
+        name
+    }
+    
+    /// Bench the requested message
+    fn _bench_msg<M>(&mut self, name: String, setup: &Setup<M>)
+    where
+        M: Sized + Serialize,
+    {
         let wasm = Wasm::new(&setup.app);
         let res = wasm
             .execute(&setup.contract, &setup.msg, &setup.funds, &setup.signer)
@@ -124,6 +151,19 @@ impl<'a> Group<'a> {
 
         self.results.insert(name, result);
         self.benchmark.console.finish_bench();
+    }
+    
+    fn _stateless_bench<'b, I, M, P>(&'b mut self, name: Option<impl Into<String>>, init: &I, params: P)
+    where
+        'a: 'b,
+        I: Fn(&P, &Console) -> Setup<M>,
+        M: Sized + Serialize,
+    {
+        let name = self._init_bench(name);
+
+        // Run the benchmark
+        let setup: Setup<M> = init(&params, &self.benchmark.console);
+        self._bench_msg(name, &setup);
     }
 
     /// Finish the group, this will get automatically called when the Group gets dropped regardless
@@ -230,6 +270,10 @@ impl<'a> Group<'a> {
 
                 // Set ranges, we do this after file loading in the case of a removed file
                 for res in all_results.values() {
+                    // Break if nothing is saved
+                    if res.len() == 0 {
+                        return
+                    }
                     set_ranges(&mut min_gas, &mut max_gas, res);
                 }
 
