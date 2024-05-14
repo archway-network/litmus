@@ -73,6 +73,18 @@ pub struct BenchSaveConfig {
     pub file_rotation: Option<Vec<String>>,
 }
 
+#[macro_export]
+macro_rules! pkg_version {
+    () => {
+        format!(
+                "v{}_{}_{}",
+                env!("CARGO_PKG_VERSION_MAJOR"),
+                env!("CARGO_PKG_VERSION_MINOR"),
+                env!("CARGO_PKG_VERSION_PATCH")
+            )
+    };
+}
+
 impl BenchSaveConfig {
     /// Save results as results.json, and store no file history
     pub fn no_history() -> Self {
@@ -95,17 +107,12 @@ impl BenchSaveConfig {
     }
 
     // old, base, new
-
-    pub fn package_version(limit: usize) -> Self {
+    
+    pub fn package_version(limit: usize, version: String) -> Self {
         Self {
             name: "package_version".to_string(),
             file_limit: Some(limit),
-            new_results_name: format!(
-                "v{}_{}_{}",
-                env!("CARGO_PKG_VERSION_MAJOR"),
-                env!("CARGO_PKG_VERSION_MINOR"),
-                env!("CARGO_PKG_VERSION_PATCH")
-            ),
+            new_results_name: version,
             file_rotation: None,
         }
     }

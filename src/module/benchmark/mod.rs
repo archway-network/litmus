@@ -195,14 +195,16 @@ impl<'a> Group<'a> {
                     // Load file config
                     config_path.push("config.json");
 
-                    let (file, mut file_config) = if let Some(file) = File::open(&config_path).ok()
+                    let mut file_config = if let Some(file) = File::open(&config_path).ok()
                     {
                         let cfg: Vec<String> =
                             serde_json::from_reader(BufReader::new(&file)).unwrap();
-                        (file, cfg)
+                        cfg
                     } else {
-                        (File::create(&config_path).unwrap(), vec![])
+                        vec![]
                     };
+                    
+                    let file = File::create(&config_path).unwrap();
 
                     // Remove the first item until were under the file limit
                     while file_config.len() >= file_limit {
@@ -211,8 +213,10 @@ impl<'a> Group<'a> {
                         res_path.pop();
                     }
 
-                    // Add the new results
-                    file_config.push(json_file(&config.new_results_name));
+                    // Add the new results, skip adding duplicates
+                    if file_config.iter().find(|s| *s == &config.new_results_name).is_none() {
+                        file_config.push(json_file(&config.new_results_name));
+                    }
                     serde_json::to_writer_pretty(BufWriter::new(file), &file_config).unwrap();
                     config_path.pop();
                 }
@@ -260,6 +264,7 @@ impl<'a> Group<'a> {
                 // Save and overwrite
 
                 // Save new file
+                println!("{}", &config.new_results_name);
                 config_path.push(format!("{}.json", &config.new_results_name));
                 let file = File::create(&config_path).unwrap();
                 serde_json::to_writer_pretty(BufWriter::new(file), &self.results).unwrap();
