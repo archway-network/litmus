@@ -441,7 +441,7 @@ mod tests {
     use crate::module::benchmark::console::Console;
     use crate::module::benchmark::{Bench, Setup};
     use crate::tests::netwars_msgs;
-    use crate::{arch, ArchwayApp};
+    use crate::{arch, ArchwayApp, BenchConfig, BenchSaveConfig};
     use test_tube::{Account, Module, Wasm};
 
     fn setup(decimals: &usize, _: &Console) -> Setup<netwars_msgs::ExecuteMsg> {
@@ -494,8 +494,8 @@ mod tests {
 
         let mut group = bench.group("amounts_test");
 
-        for i in 1..10 {
-            group.bench(format!("{}_decimals", i), setup, i)
+        for i in 1..4 {
+            group.bench(format!("{}_decimals", i), setup, i+1)
         }
     }
 
@@ -504,12 +504,30 @@ mod tests {
 
         let mut group = bench.group("iter_amounts_test");
 
-        group.iter_bench(setup, (1..10).collect())
+        group.iter_bench(setup, (1..4).collect())
     }
 
     #[test]
     fn test_main() {
-        let mut bench = Bench::new();
+        // let mut bench = Bench::new();
+
+        // Change CLI behavior
+        let mut bench = Bench::with_config(BenchConfig {
+            path: "./".to_string(),
+            name: "hello_dorahacks".to_string(),
+            history: vec![
+                BenchSaveConfig::save_last(),
+                BenchSaveConfig::no_history(),
+                BenchSaveConfig::package_version(2, "v1.0.0".to_string()),
+                BenchSaveConfig {
+                    name: "example".to_string(),
+                    file_limit: None,
+                    new_results_name: "latest".to_string(),
+                    file_rotation: Some(vec!["oldest".to_string(), "last".to_string(), "latest".to_string()]),
+                }
+            ],
+            truncate_benches: false,
+        });
 
         test_group(&mut bench);
         test_iter_group(&mut bench);

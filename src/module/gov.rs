@@ -1,24 +1,17 @@
-use cosmrs::tx::MessageExt;
+use test_tube::cosmrs::tx::MessageExt;
 
-// Migrating off osmosis_std would require cosmos sdk to derive serde for all of their query responses
-// use cosmos_sdk_proto::Any;
-// use cosmos_sdk_proto::cosmos::base::v1beta1::Coin;
-// use cosmos_sdk_proto::cosmos::gov::v1beta1::{
-//     MsgSubmitProposal, MsgSubmitProposalResponse, MsgVote, MsgVoteResponse, QueryParamsRequest,
-//     QueryParamsResponse, QueryProposalRequest, QueryProposalResponse, VoteOption,
-// };
-
-use osmosis_std::shim::Any;
-use osmosis_std::types::cosmos::base::v1beta1::Coin;
-use osmosis_std::types::cosmos::gov::v1beta1::{
+use archway_proto::cosmos::base::v1beta1::Coin;
+use archway_proto::cosmos::gov::v1beta1::{
     MsgSubmitProposal, MsgSubmitProposalResponse, MsgVote, MsgVoteResponse, QueryParamsRequest,
     QueryParamsResponse, QueryProposalRequest, QueryProposalResponse, VoteOption,
 };
+use pbjson_types::Any;
 use test_tube::{fn_execute, fn_query, Account, RunnerError, RunnerExecuteResult, SigningAccount};
 
 use crate::ArchwayApp;
 use test_tube::module::Module;
 use test_tube::runner::Runner;
+use crate::module::type_url;
 
 pub struct Gov<'a, R: Runner<'a>> {
     runner: &'a R,
@@ -61,10 +54,10 @@ where
         self.submit_proposal(
             MsgSubmitProposal {
                 content: Some(Any {
-                    type_url: msg_type_url,
+                    type_url: type_url(&msg_type_url),
                     value: msg
                         .to_bytes()
-                        .map_err(|e| RunnerError::EncodeError(e.into()))?,
+                        .map_err(|e| RunnerError::EncodeError(e.into()))?.into(),
                 }),
                 initial_deposit: initial_deposit
                     .into_iter()
@@ -120,10 +113,10 @@ impl<'a> GovWithAppAccess<'a> {
         let submit_proposal_res = self.gov.submit_proposal(
             MsgSubmitProposal {
                 content: Some(Any {
-                    type_url: msg_type_url,
+                    type_url: format!("/{}", msg_type_url),
                     value: msg
                         .to_bytes()
-                        .map_err(|e| RunnerError::EncodeError(e.into()))?,
+                        .map_err(|e| RunnerError::EncodeError(e.into()))?.into(),
                 }),
                 initial_deposit: min_deposit,
                 proposer,

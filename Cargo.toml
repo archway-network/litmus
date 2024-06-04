@@ -11,22 +11,20 @@ benchmark = ["plotters", "indicatif", "console"]
 wasm-sudo = ["test-tube/wasm-sudo"]
 
 [dependencies]
-# Using local branch while test-tubes until the source stops making breaking changes
-test-tube = { git ="https://github.com/FloppyDisck/test-tube.git", features = ["module-wrappers"] }
-archway-proto = "=0.1.0"
-cosmos-sdk-proto = "=0.21.1"
-cosmrs = {version = "=0.15.0", features = ["cosmwasm"]}
-cosmwasm-std = "^1.2"
-osmosis-std = "=0.22.0"
-prost = "^0.12.3"
-serde = "^1.0"
-serde_json = "^1.0"
+test-tube = { version = "0.7.0" }
+archway-proto = { git = "https://github.com/archway-network/arch3.rs.git", rev = "3551d45" }
+pbjson-types = "0.6.0"
+prost-types = "0.12.6"
+cosmwasm-std = "1.5.5"
+prost = "0.12.3"
+serde = "1.0"
+serde_json = "1.0"
 plotters = { version = "0.3.5", optional = true }
 indicatif = { version = "0.17.8", optional = true }
 console = { version = "0.15.8", optional = true }
 
 [dev-dependencies]
-cw1-whitelist = "2.0.0"
+cw1-whitelist = "1.1.2"
 cosmwasm-schema = "2.0.1"
 #network-wars = { git = "https://github.com/drewstaylor/fomo", features = ["library"] }
 

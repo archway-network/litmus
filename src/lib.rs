@@ -1,13 +1,16 @@
 mod module;
 
+pub use archway_proto;
+
 #[cfg(feature = "benchmark")]
 pub use module::benchmark::*;
 
 use crate::module::GovWithAppAccess;
-use cosmos_sdk_proto::Any;
+use test_tube::cosmrs::proto::tendermint::v0_37::abci::ResponseDeliverTx;
 use cosmwasm_std::{Coin, CosmosMsg};
-use osmosis_std::types::cosmos::params::v1beta1::{ParamChange, ParameterChangeProposal};
-use prost::Message;
+use archway_proto::cosmos::params::v1beta1::{ParamChange, ParameterChangeProposal};
+use prost::{Message, Name};
+use prost_types::Any;
 use serde::de::DeserializeOwned;
 pub use test_tube;
 use test_tube::{
@@ -45,7 +48,7 @@ impl ArchwayApp {
 
         let gov = GovWithAppAccess::new(&app);
         gov.propose_and_execute(
-            ParameterChangeProposal::TYPE_URL.to_string(),
+            ParameterChangeProposal::full_name(),
             ParameterChangeProposal {
                 title: "Change gas price to current nets".to_string(),
                 description: "A perfectly descriptive description".to_string(),
@@ -117,6 +120,10 @@ impl<'a> Runner<'a> for ArchwayApp {
         self.inner.execute_multiple_raw(msgs, signer)
     }
 
+    fn execute_tx(&self, tx_bytes: &[u8]) -> RunnerResult<ResponseDeliverTx> {
+        self.inner.execute_tx(tx_bytes)
+    }
+
     fn execute_cosmos_msgs<S>(
         &self,
         msgs: &[CosmosMsg],
@@ -126,19 +133,6 @@ impl<'a> Runner<'a> for ArchwayApp {
         S: Message + Default,
     {
         self.inner.execute_cosmos_msgs(msgs, signer)
-    }
-
-    fn execute<M, R>(
-        &self,
-        msg: M,
-        type_url: &str,
-        signer: &SigningAccount,
-    ) -> RunnerExecuteResult<R>
-    where
-        M: Message,
-        R: Message + Default,
-    {
-        self.inner.execute(msg, type_url, signer)
     }
 
     fn query<Q, R>(&self, path: &str, q: &Q) -> RunnerResult<R>
@@ -157,15 +151,14 @@ mod tests {
 
     use cosmwasm_std::{coins, Coin, Uint128};
     use cw1_whitelist::msg::{ExecuteMsg, InstantiateMsg};
-    use osmosis_std::types::cosmos::bank::v1beta1::QueryAllBalancesRequest;
+    use archway_proto::cosmos::bank::v1beta1::QueryAllBalancesRequest;
     use serde::Serialize;
 
     use crate::{aarch, arch, ArchwayApp};
     use test_tube::account::{Account, FeeSetting};
     use test_tube::module::Module;
     use test_tube::runner::*;
-    use test_tube::Bank;
-    use test_tube::Wasm;
+    use crate::module::{Bank, Wasm};
 
     pub mod netwars_msgs {
         use cosmwasm_std::{Addr, Uint128};
