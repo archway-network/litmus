@@ -17,13 +17,13 @@ use test_tube::{
     Account, BaseApp, FeeSetting, Runner, RunnerExecuteResult, RunnerResult, SigningAccount,
 };
 
-const FEE_DENOM: &str = "aarch";
+pub const FEE_DENOM: &str = "aarch";
 // const ADDRESS_PREFIX: &str = "arch";
-const ADDRESS_PREFIX: &str = "cosmos";
-const CHAIN_ID: &str = "archway-1";
+pub const ADDRESS_PREFIX: &str = "cosmos";
+pub const CHAIN_ID: &str = "archway-1";
 
-const DEFAULT_GAS_ADJUSTMENT: f64 = 1.4;
-const GAS_PRICE: u128 = 900_000_000_000;
+pub const DEFAULT_GAS_ADJUSTMENT: f64 = 1.4;
+pub const GAS_PRICE: u128 = 900_000_000_000;
 // const GAS_PRICE: u128 = 140_000_000_000;
 
 pub fn aarch(amount: u128) -> Coin {
