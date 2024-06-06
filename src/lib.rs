@@ -1,4 +1,4 @@
-mod module;
+pub mod module;
 
 pub use archway_proto;
 
