@@ -127,7 +127,7 @@ impl<'a> GovWithAppAccess<'a> {
         let proposal_id = submit_proposal_res.data.proposal_id;
 
         // get validator to vote yes for proposal
-        let val = self.app.inner.get_first_validator_signing_account()?;
+        let val = self.app.get_first_validator_signing_account()?;
 
         self.gov
             .vote(
@@ -154,7 +154,6 @@ impl<'a> GovWithAppAccess<'a> {
 
         // increase time to pass voting period
         self.app
-            .inner
             .increase_time(voting_period.seconds as u64 + 1);
 
         Ok(submit_proposal_res)

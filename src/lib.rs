@@ -1,21 +1,25 @@
 pub mod module;
 
+use std::ffi::CString;
 pub use archway_proto;
 
 #[cfg(feature = "benchmark")]
 pub use module::benchmark::*;
 
-use crate::module::GovWithAppAccess;
-use test_tube::cosmrs::proto::tendermint::v0_37::abci::ResponseDeliverTx;
-use cosmwasm_std::{Coin, CosmosMsg};
-use archway_proto::cosmos::params::v1beta1::{ParamChange, ParameterChangeProposal};
-use prost::{Message, Name};
+use test_tube::cosmrs::proto::tendermint::v0_37::abci::{RequestDeliverTx, ResponseDeliverTx};
+use cosmwasm_std::Coin;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use prost::Message;
 use prost_types::Any;
-use serde::de::DeserializeOwned;
 pub use test_tube;
-use test_tube::{
-    Account, BaseApp, FeeSetting, Runner, RunnerExecuteResult, RunnerResult, SigningAccount,
-};
+use test_tube::runner::error::DecodeError;
+use test_tube::{Account, cosmrs, EncodeError, FeeSetting, redefine_as_go_string, Runner, RunnerError, RunnerExecuteResult, RunnerResult, SigningAccount};
+use test_tube::bindings::{AccountNumber, AccountSequence, BeginBlock, EndBlock, Execute, GetBlockHeight, GetBlockTime, GetValidatorPrivateKey, IncreaseTime, InitAccount, InitTestEnv, Query, Simulate};
+use test_tube::cosmrs::crypto::secp256k1::SigningKey;
+use test_tube::cosmrs::tx;
+use test_tube::cosmrs::tx::{Fee, SignerInfo};
+use test_tube::runner::result::RawResult;
 
 pub const FEE_DENOM: &str = "aarch";
 // const ADDRESS_PREFIX: &str = "arch";
@@ -23,8 +27,8 @@ pub const ADDRESS_PREFIX: &str = "cosmos";
 pub const CHAIN_ID: &str = "archway-1";
 
 pub const DEFAULT_GAS_ADJUSTMENT: f64 = 1.4;
-pub const GAS_PRICE: u128 = 900_000_000_000;
-// const GAS_PRICE: u128 = 140_000_000_000;
+// pub const GAS_PRICE: u128 = 900_000_000_000;
+const GAS_PRICE: u128 = 140_000_000_000;
 
 pub fn aarch(amount: u128) -> Coin {
     Coin::new(amount, FEE_DENOM)
@@ -35,59 +39,292 @@ pub fn arch(amount: u128) -> Coin {
 }
 
 pub struct ArchwayApp {
-    inner: BaseApp,
+    id: u64,
+    fee_denom: String,
+    chain_id: String,
+    address_prefix: String,
+    default_gas_adjustment: f64,
 }
 
 impl ArchwayApp {
     pub fn new() -> Self {
-        let app = ArchwayApp {
-            inner: BaseApp::new(FEE_DENOM, CHAIN_ID, ADDRESS_PREFIX, DEFAULT_GAS_ADJUSTMENT),
-        };
-
-        let proposer = app.init_account(&[arch(100)]).unwrap();
-
-        let gov = GovWithAppAccess::new(&app);
-        gov.propose_and_execute(
-            ParameterChangeProposal::full_name(),
-            ParameterChangeProposal {
-                title: "Change gas price to current nets".to_string(),
-                description: "A perfectly descriptive description".to_string(),
-                changes: vec![ParamChange {
-                    subspace: "rewards".to_string(),
-                    key: "MinPriceOfGas".to_string(),
-                    value:
-                        "{ \"denom\": \"aarch\", \"amount\": \"140000000000.000000000000000000\"}"
-                            .to_string(),
-                }],
-            },
-            proposer.address(),
-            &proposer,
-        )
-        .unwrap();
-
-        app
+        let id = unsafe { InitTestEnv() };
+        Self {
+            id,
+            fee_denom: FEE_DENOM.to_string(),
+            chain_id: CHAIN_ID.to_string(),
+            address_prefix: ADDRESS_PREFIX.to_string(),
+            default_gas_adjustment: DEFAULT_GAS_ADJUSTMENT,
+        }
     }
 }
 
 impl ArchwayApp {
+    pub fn get_block_time_nanos(&self) -> i64 {
+        unsafe { GetBlockTime(self.id) }
+    }
+    
     /// Get the current block time in seconds
     pub fn get_block_time_seconds(&self) -> i64 {
-        self.inner.get_block_time_nanos() / 1_000_000_000i64
+        self.get_block_time_nanos() / 1_000_000_000i64
     }
 
-    /// Inits accounts with default fee settings
+    pub fn get_block_height(&self) -> i64 {
+        unsafe { GetBlockHeight(self.id) }
+    }
+
+    pub fn increase_time(&self, seconds: u64) {
+        unsafe {
+            IncreaseTime(self.id, seconds.try_into().unwrap());
+        }
+    }
+
+    pub fn get_first_validator_signing_account(&self) -> RunnerResult<SigningAccount> {
+        let base64_priv = unsafe {
+            let val_priv = GetValidatorPrivateKey(self.id, 0);
+            CString::from_raw(val_priv)
+        }
+            .to_str()
+            .map_err(DecodeError::Utf8Error)?
+            .to_string();
+
+        let secp256k1_priv = BASE64_STANDARD
+            .decode(base64_priv)
+            .map_err(DecodeError::Base64DecodeError)?;
+        let signging_key = SigningKey::from_slice(&secp256k1_priv).map_err(|e| {
+            let msg = e.to_string();
+            DecodeError::SigningKeyDecodeError { msg }
+        })?;
+
+        Ok(SigningAccount::new(
+            self.address_prefix.clone(),
+            signging_key,
+            FeeSetting::Auto {
+                gas_price: Coin::new(GAS_PRICE, self.fee_denom.clone()),
+                gas_adjustment: self.default_gas_adjustment,
+            },
+        ))
+    }
+
     pub fn init_account(&self, coins: &[Coin]) -> RunnerResult<SigningAccount> {
-        self.inner.init_account(coins).map(|acc| {
-            acc.with_fee_setting(FeeSetting::Auto {
+        let mut coins = coins.to_vec();
+
+        // invalid coins if denom are unsorted
+        coins.sort_by(|a, b| a.denom.cmp(&b.denom));
+
+        let coins_json = serde_json::to_string(&coins).map_err(EncodeError::JsonEncodeError)?;
+        redefine_as_go_string!(coins_json);
+
+        let base64_priv = unsafe {
+            BeginBlock(self.id);
+            let addr = InitAccount(self.id, coins_json);
+            EndBlock(self.id);
+            CString::from_raw(addr)
+        }
+            .to_str()
+            .map_err(DecodeError::Utf8Error)?
+            .to_string();
+
+        let secp256k1_priv = BASE64_STANDARD
+            .decode(base64_priv)
+            .map_err(DecodeError::Base64DecodeError)?;
+        let signging_key = SigningKey::from_slice(&secp256k1_priv).map_err(|e| {
+            let msg = e.to_string();
+            DecodeError::SigningKeyDecodeError { msg }
+        })?;
+
+        Ok(SigningAccount::new(
+            self.address_prefix.clone(),
+            signging_key,
+            FeeSetting::Auto {
                 gas_price: aarch(GAS_PRICE),
-                gas_adjustment: DEFAULT_GAS_ADJUSTMENT,
-            })
-        })
+                gas_adjustment: self.default_gas_adjustment,
+            },
+        ))
+    }
+
+    pub fn get_account_sequence(&self, address: &str) -> u64 {
+        redefine_as_go_string!(address);
+        unsafe { AccountSequence(self.id, address) }
+    }
+
+    pub fn get_account_number(&self, address: &str) -> u64 {
+        redefine_as_go_string!(address);
+        unsafe { AccountNumber(self.id, address) }
     }
 
     pub fn init_accounts(&self, coins: &[Coin], count: u64) -> RunnerResult<Vec<SigningAccount>> {
         (0..count).map(|_| self.init_account(coins)).collect()
     }
+    
+    fn execute_multiple_with_granter<M, R>(
+        &self,
+        msgs: &[(M, &str)],
+        signer: &SigningAccount,
+        granter: Option<&SigningAccount>
+    ) -> RunnerExecuteResult<R>
+        where
+            M: ::prost::Message,
+            R: ::prost::Message + Default,
+    {
+        let msgs = msgs
+            .iter()
+            .map(|(msg, type_url)| {
+                let mut buf = Vec::new();
+                M::encode(msg, &mut buf).map_err(EncodeError::ProtoEncodeError)?;
+
+                Ok(Any {
+                    type_url: type_url.to_string(),
+                    value: buf,
+                })
+            })
+            .collect::<Result<Vec<Any>, RunnerError>>()?;
+
+        self.execute_multiple_raw_with_granter(msgs, signer, granter)
+    }
+
+    fn execute_multiple_raw_with_granter<R>(
+        &self,
+        msgs: Vec<Any>,
+        signer: &SigningAccount,
+        granter: Option<&SigningAccount>
+    ) -> RunnerExecuteResult<R>
+        where
+            R: ::prost::Message + Default,
+    {
+        unsafe {
+            self.run_block(|| {
+                let tx_sim_fee =
+                    self.create_signed_tx(msgs.clone(), signer, self.default_simulation_fee())?;
+                let mut fee = self.calculate_fee(&tx_sim_fee, signer)?;
+                
+                if let Some(granter) = granter {
+                    fee.granter = Some(granter.account_id())
+                }
+
+                let tx = self.create_signed_tx(msgs.clone(), signer, fee)?.into();
+
+                let mut buf = Vec::new();
+                RequestDeliverTx::encode(&RequestDeliverTx { tx }, &mut buf)
+                    .map_err(EncodeError::ProtoEncodeError)?;
+
+                let base64_req = BASE64_STANDARD.encode(buf);
+                redefine_as_go_string!(base64_req);
+
+                let res = Execute(self.id, base64_req);
+                let res = RawResult::from_non_null_ptr(res).into_result()?;
+
+                ResponseDeliverTx::decode(res.as_slice())
+                    .map_err(DecodeError::ProtoDecodeError)?
+                    .try_into()
+            })
+        }
+    }
+
+    pub fn default_simulation_fee(&self) -> Fee {
+        Fee::from_amount_and_gas(
+            cosmrs::Coin {
+                denom: self.fee_denom.parse().unwrap(),
+                amount: GAS_PRICE,
+            },
+            0u64,
+        )
+    }
+
+    pub fn simulate_tx_bytes(
+        &self,
+        tx_bytes: &[u8],
+    ) -> RunnerResult<cosmrs::proto::cosmos::base::abci::v1beta1::GasInfo> {
+        let base64_tx_bytes = BASE64_STANDARD.encode(tx_bytes);
+        redefine_as_go_string!(base64_tx_bytes);
+
+        unsafe {
+            let res = Simulate(self.id, base64_tx_bytes);
+            let res = RawResult::from_non_null_ptr(res).into_result()?;
+
+            cosmrs::proto::cosmos::base::abci::v1beta1::GasInfo::decode(res.as_slice())
+                .map_err(DecodeError::ProtoDecodeError)
+                .map_err(RunnerError::DecodeError)
+        }
+    }
+    
+    pub fn calculate_fee(&self, tx_bytes: &[u8], fee_payer: &SigningAccount) -> RunnerResult<Fee> {
+        match &fee_payer.fee_setting() {
+            FeeSetting::Auto {
+                gas_price,
+                gas_adjustment,
+            } => {
+                let gas_info = self.simulate_tx_bytes(tx_bytes)?;
+                let gas_limit = ((gas_info.gas_used as f64) * (gas_adjustment)).ceil() as u64;
+
+                let amount = cosmrs::Coin {
+                    denom: self.fee_denom.parse().unwrap(),
+                    amount: (((gas_limit as f64) * (gas_price.amount.u128() as f64)).ceil() as u64)
+                        .into(),
+                };
+
+                Ok(Fee::from_amount_and_gas(amount, gas_limit))
+            }
+            FeeSetting::Custom { amount, gas_limit } => Ok(Fee::from_amount_and_gas(
+                cosmrs::Coin {
+                    denom: amount.denom.parse().unwrap(),
+                    amount: amount.amount.to_string().parse().unwrap(),
+                },
+                *gas_limit,
+            )),
+        }
+    }
+
+    fn create_signed_tx<I>(
+        &self,
+        msgs: I,
+        signer: &SigningAccount,
+        fee: Fee,
+    ) -> RunnerResult<Vec<u8>>
+        where
+            I: IntoIterator<Item = cosmrs::Any>,
+    {
+        let tx_body = tx::Body::new(msgs, "", 0u32);
+        let addr = signer.address();
+
+        let seq = self.get_account_sequence(&addr);
+        let account_number = self.get_account_number(&addr);
+
+        let signer_info = SignerInfo::single_direct(Some(signer.public_key()), seq);
+
+        let chain_id = self
+            .chain_id
+            .parse()
+            .expect("parse const str of chain id should never fail");
+
+        let auth_info = signer_info.auth_info(fee);
+        let sign_doc = tx::SignDoc::new(&tx_body, &auth_info, &chain_id, account_number)
+            .map_err(EncodeError::from_proto_error_report)?;
+
+        let tx_raw = sign_doc
+            .sign(signer.signing_key())
+            .map_err(EncodeError::from_proto_error_report)?;
+
+        tx_raw
+            .to_bytes()
+            .map_err(EncodeError::from_proto_error_report)
+            .map_err(RunnerError::EncodeError)
+    }
+
+    unsafe fn run_block<T, E>(&self, execution: impl Fn() -> Result<T, E>) -> Result<T, E> {
+        unsafe { BeginBlock(self.id) };
+        match execution() {
+            ok @ Ok(_) => {
+                unsafe { EndBlock(self.id) };
+                ok
+            }
+            err @ Err(_) => {
+                unsafe { EndBlock(self.id) };
+                err
+            }
+        }
+    }
+    
 }
 
 impl Default for ArchwayApp {
@@ -106,7 +343,7 @@ impl<'a> Runner<'a> for ArchwayApp {
         M: ::prost::Message,
         R: ::prost::Message + Default,
     {
-        self.inner.execute_multiple(msgs, signer)
+        self.execute_multiple_with_granter(msgs, signer, None)
     }
 
     fn execute_multiple_raw<R>(
@@ -117,30 +354,49 @@ impl<'a> Runner<'a> for ArchwayApp {
     where
         R: prost::Message + Default,
     {
-        self.inner.execute_multiple_raw(msgs, signer)
+        self.execute_multiple_raw_with_granter(msgs, signer, None)
     }
 
     fn execute_tx(&self, tx_bytes: &[u8]) -> RunnerResult<ResponseDeliverTx> {
-        self.inner.execute_tx(tx_bytes)
-    }
+        unsafe {
+            self.run_block(|| {
+                let request_devlier_tx = RequestDeliverTx {
+                    tx: tx_bytes.to_vec().into(),
+                };
 
-    fn execute_cosmos_msgs<S>(
-        &self,
-        msgs: &[CosmosMsg],
-        signer: &SigningAccount,
-    ) -> RunnerExecuteResult<S>
-    where
-        S: Message + Default,
-    {
-        self.inner.execute_cosmos_msgs(msgs, signer)
+                let base64_req = BASE64_STANDARD.encode(request_devlier_tx.encode_to_vec());
+                redefine_as_go_string!(base64_req);
+
+                let res = Execute(self.id, base64_req);
+                let res = RawResult::from_non_null_ptr(res).into_result()?;
+
+                ResponseDeliverTx::decode(res.as_slice())
+                    .map_err(DecodeError::ProtoDecodeError)
+                    .map_err(Into::into)
+            })
+        }
     }
 
     fn query<Q, R>(&self, path: &str, q: &Q) -> RunnerResult<R>
-    where
-        Q: ::prost::Message,
-        R: ::prost::Message + DeserializeOwned + Default,
+        where
+            Q: ::prost::Message,
+            R: ::prost::Message + Default,
     {
-        self.inner.query(path, q)
+        let mut buf = Vec::new();
+
+        Q::encode(q, &mut buf).map_err(EncodeError::ProtoEncodeError)?;
+
+        let base64_query_msg_bytes = BASE64_STANDARD.encode(buf);
+        redefine_as_go_string!(path);
+        redefine_as_go_string!(base64_query_msg_bytes);
+
+        unsafe {
+            let res = Query(self.id, path, base64_query_msg_bytes);
+            let res = RawResult::from_non_null_ptr(res).into_result()?;
+            R::decode(res.as_slice())
+                .map_err(DecodeError::ProtoDecodeError)
+                .map_err(RunnerError::DecodeError)
+        }
     }
 }
 
@@ -281,7 +537,6 @@ mod tests {
     fn test_init_accounts() {
         let app = ArchwayApp::default();
         let accounts = app
-            .inner
             .init_accounts(&coins(100_000_000_000, "aarch"), 3)
             .unwrap();
 
@@ -295,13 +550,13 @@ mod tests {
     fn test_get_and_set_block_timestamp() {
         let app = ArchwayApp::default();
 
-        let block_time_nanos = app.inner.get_block_time_nanos();
+        let block_time_nanos = app.get_block_time_nanos();
         let block_time_seconds = app.get_block_time_seconds();
 
-        app.inner.increase_time(10u64);
+        app.increase_time(10u64);
 
         assert_eq!(
-            app.inner.get_block_time_nanos(),
+            app.get_block_time_nanos(),
             block_time_nanos + 10_000_000_000
         );
         assert_eq!(app.get_block_time_seconds(), block_time_seconds + 10);
@@ -312,11 +567,11 @@ mod tests {
         let app = ArchwayApp::default();
 
         // Governance transactions fix
-        assert_eq!(app.inner.get_block_height(), 5i64);
+        assert_eq!(app.get_block_height(), 1i64);
 
-        app.inner.increase_time(10u64);
+        app.increase_time(10u64);
 
-        assert_eq!(app.inner.get_block_height(), 6i64);
+        assert_eq!(app.get_block_height(), 2i64);
     }
 
     #[test]
@@ -325,11 +580,10 @@ mod tests {
 
         let app = ArchwayApp::default();
         let accs = app
-            .inner
             .init_accounts(
                 &[
                     Coin::new(1_000_000_000_000, "uatom"),
-                    Coin::new(1_000_000_000_000, "aarch"),
+                    Coin::new(1_000_000_000_000_000_000_000_000, "aarch"),
                 ],
                 2,
             )
@@ -392,13 +646,11 @@ mod tests {
     #[test]
     fn test_custom_fee() {
         let app = ArchwayApp::default();
-        let initial_balance = 1_000_000_000_000;
+        let initial_balance = 1_000_000_000_000_000_000_000;
         let alice = app
-            .inner
             .init_account(&coins(initial_balance, "aarch"))
             .unwrap();
         let bob = app
-            .inner
             .init_account(&coins(initial_balance, "aarch"))
             .unwrap();
 
