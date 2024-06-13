@@ -157,7 +157,7 @@ impl ArchwayApp {
         (0..count).map(|_| self.init_account(coins)).collect()
     }
     
-    fn execute_multiple_with_granter<M, R>(
+    pub fn execute_multiple_with_granter<M, R>(
         &self,
         msgs: &[(M, &str)],
         signer: &SigningAccount,
@@ -183,7 +183,7 @@ impl ArchwayApp {
         self.execute_multiple_raw_with_granter(msgs, signer, granter)
     }
 
-    fn execute_multiple_raw_with_granter<R>(
+    pub fn execute_multiple_raw_with_granter<R>(
         &self,
         msgs: Vec<Any>,
         signer: &SigningAccount,
