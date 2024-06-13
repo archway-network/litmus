@@ -1,6 +1,7 @@
 pub mod module;
 
 use std::ffi::CString;
+use std::str::FromStr;
 pub use archway_proto;
 
 #[cfg(feature = "benchmark")]
@@ -17,7 +18,7 @@ use test_tube::runner::error::DecodeError;
 use test_tube::{Account, cosmrs, EncodeError, FeeSetting, redefine_as_go_string, Runner, RunnerError, RunnerExecuteResult, RunnerResult, SigningAccount};
 use test_tube::bindings::{AccountNumber, AccountSequence, BeginBlock, EndBlock, Execute, GetBlockHeight, GetBlockTime, GetValidatorPrivateKey, IncreaseTime, InitAccount, InitTestEnv, Query, Simulate};
 use test_tube::cosmrs::crypto::secp256k1::SigningKey;
-use test_tube::cosmrs::tx;
+use test_tube::cosmrs::{AccountId, tx};
 use test_tube::cosmrs::tx::{Fee, SignerInfo};
 use test_tube::runner::result::RawResult;
 
@@ -161,7 +162,7 @@ impl ArchwayApp {
         &self,
         msgs: &[(M, &str)],
         signer: &SigningAccount,
-        granter: Option<&SigningAccount>
+        granter: Option<&str>
     ) -> RunnerExecuteResult<R>
         where
             M: ::prost::Message,
@@ -187,7 +188,7 @@ impl ArchwayApp {
         &self,
         msgs: Vec<Any>,
         signer: &SigningAccount,
-        granter: Option<&SigningAccount>
+        granter: Option<&str>
     ) -> RunnerExecuteResult<R>
         where
             R: ::prost::Message + Default,
@@ -199,7 +200,7 @@ impl ArchwayApp {
                 let mut fee = self.calculate_fee(&tx_sim_fee, signer)?;
                 
                 if let Some(granter) = granter {
-                    fee.granter = Some(granter.account_id())
+                    fee.granter = Some(AccountId::from_str(granter).unwrap())
                 }
 
                 let tx = self.create_signed_tx(msgs.clone(), signer, fee)?.into();
