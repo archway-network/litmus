@@ -195,8 +195,14 @@ impl ArchwayApp {
     {
         unsafe {
             self.run_block(|| {
+                // Set granter for the sim fee
+                let mut sim_fee = self.default_simulation_fee();
+                if let Some(granter) = granter {
+                    sim_fee.granter = Some(AccountId::from_str(granter).unwrap())
+                }
+                
                 let tx_sim_fee =
-                    self.create_signed_tx(msgs.clone(), signer, self.default_simulation_fee())?;
+                    self.create_signed_tx(msgs.clone(), signer, sim_fee)?;
                 let mut fee = self.calculate_fee(&tx_sim_fee, signer)?;
                 
                 if let Some(granter) = granter {
@@ -257,7 +263,6 @@ impl ArchwayApp {
             } => {
                 let gas_info = self.simulate_tx_bytes(tx_bytes)?;
                 let gas_limit = ((gas_info.gas_used as f64) * (gas_adjustment)).ceil() as u64;
-
                 let amount = cosmrs::Coin {
                     denom: self.fee_denom.parse().unwrap(),
                     amount: (((gas_limit as f64) * (gas_price.amount.u128() as f64)).ceil() as u64)
