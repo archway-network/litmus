@@ -1,6 +1,3 @@
-#[cfg(feature = "benchmark")]
-pub mod benchmark;
-
 mod gov;
 mod bank;
 mod wasm;
