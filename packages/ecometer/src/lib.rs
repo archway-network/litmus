@@ -4,13 +4,11 @@ pub mod job;
 pub mod naming;
 pub mod results;
 
-
-
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
     use crate::harness::HarnessBuilder;
     use crate::job::Setup;
+    use std::sync::Arc;
 
     #[test]
     fn generate_jobs() {

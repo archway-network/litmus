@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use crate::naming::Naming;
 use crate::results::{BenchResult, BenchResults, Gas};
 use archway_test_tube::archway_proto::cosmos::bank::v1beta1::QueryBalanceRequest;
@@ -7,6 +6,7 @@ use archway_test_tube::test_tube::{Account, SigningAccount};
 use archway_test_tube::{ArchwayApp, FEE_DENOM};
 use cosmwasm_std::Coin;
 use serde::Serialize;
+use std::sync::Arc;
 
 /// Output msg for the job benching
 pub struct Setup<MSG> {
@@ -30,14 +30,18 @@ pub trait Job: Send + Sync {
 
 // A single threaded group, app state is saved across benches
 pub struct Continuous<STATE, PARAM, MSG>
-where PARAM: Send + Sync{
+where
+    PARAM: Send + Sync,
+{
     pub id: usize,
     pub parameters: Vec<PARAM>,
     pub setup: Box<dyn Fn(&ArchwayApp) -> STATE + Send + Sync>,
     pub update: Box<dyn Fn(&ArchwayApp, &mut STATE, &PARAM) -> Setup<MSG> + Send + Sync>,
 }
 
-impl<STATE, PARAM: Naming + Send + Sync, MSG: Sized + Serialize + Send + Sync> Job for Continuous<STATE, PARAM, MSG> {
+impl<STATE, PARAM: Naming + Send + Sync, MSG: Sized + Serialize + Send + Sync> Job
+    for Continuous<STATE, PARAM, MSG>
+{
     fn set_group_id(&mut self, id: usize) {
         self.id = id;
     }
@@ -65,7 +69,9 @@ impl<STATE, PARAM: Naming + Send + Sync, MSG: Sized + Serialize + Send + Sync> J
 
 // A multithreaded group, each bench has an individual app state
 pub struct Independent<PARAM, MSG>
-where PARAM: Send{
+where
+    PARAM: Send,
+{
     pub id: usize,
     pub parameters: PARAM,
     pub setup: Box<dyn Fn(&ArchwayApp, &PARAM) -> Setup<MSG> + Send + Sync>,

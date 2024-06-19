@@ -3,6 +3,7 @@ use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::time::Duration;
 
 // TODO: console is very limited right now and provides now API for the user to hijack
+#[allow(dead_code)]
 pub struct ConsoleSettings {
     /// Combines all group progress bars into a singular bar
     single_loading_bar: bool,

@@ -15,11 +15,11 @@ use std::path::PathBuf;
 macro_rules! pkg_version {
     () => {
         format!(
-                "v{}_{}_{}",
-                env!("CARGO_PKG_VERSION_MAJOR"),
-                env!("CARGO_PKG_VERSION_MINOR"),
-                env!("CARGO_PKG_VERSION_PATCH")
-            )
+            "v{}_{}_{}",
+            env!("CARGO_PKG_VERSION_MAJOR"),
+            env!("CARGO_PKG_VERSION_MINOR"),
+            env!("CARGO_PKG_VERSION_PATCH")
+        )
     };
 }
 

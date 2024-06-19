@@ -1,13 +1,16 @@
-use cosmwasm_std::Coin;
+use crate::module::type_url;
 use archway_proto::cosmwasm::wasm::v1::{
     AccessConfig, MsgExecuteContract, MsgExecuteContractResponse, MsgInstantiateContract,
     MsgInstantiateContractResponse, MsgStoreCode, MsgStoreCodeResponse,
     QuerySmartContractStateRequest, QuerySmartContractStateResponse,
 };
+use cosmwasm_std::Coin;
 use prost::Name;
 use serde::{de::DeserializeOwned, Serialize};
-use test_tube::{Account, DecodeError, EncodeError, Runner, RunnerError, RunnerExecuteResult, RunnerResult, SigningAccount};
-use crate::module::type_url;
+use test_tube::{
+    Account, DecodeError, EncodeError, Runner, RunnerError, RunnerExecuteResult, RunnerResult,
+    SigningAccount,
+};
 
 pub struct Wasm<'a, R: Runner<'a>> {
     runner: &'a R,
@@ -20,8 +23,8 @@ impl<'a, R: Runner<'a>> super::Module<'a, R> for Wasm<'a, R> {
 }
 
 impl<'a, R> Wasm<'a, R>
-    where
-        R: Runner<'a>,
+where
+    R: Runner<'a>,
 {
     pub fn store_code(
         &self,
@@ -49,8 +52,8 @@ impl<'a, R> Wasm<'a, R>
         funds: &[Coin],
         signer: &SigningAccount,
     ) -> RunnerExecuteResult<MsgInstantiateContractResponse>
-        where
-            M: ?Sized + Serialize,
+    where
+        M: ?Sized + Serialize,
     {
         self.runner.execute(
             MsgInstantiateContract {
@@ -79,8 +82,8 @@ impl<'a, R> Wasm<'a, R>
         funds: &[Coin],
         signer: &SigningAccount,
     ) -> RunnerExecuteResult<MsgExecuteContractResponse>
-        where
-            M: ?Sized + Serialize,
+    where
+        M: ?Sized + Serialize,
     {
         self.runner.execute(
             MsgExecuteContract {
@@ -101,9 +104,9 @@ impl<'a, R> Wasm<'a, R>
     }
 
     pub fn query<M, Res>(&self, contract: &str, msg: &M) -> RunnerResult<Res>
-        where
-            M: ?Sized + Serialize,
-            Res: ?Sized + DeserializeOwned,
+    where
+        M: ?Sized + Serialize,
+        Res: ?Sized + DeserializeOwned,
     {
         let res = self
             .runner

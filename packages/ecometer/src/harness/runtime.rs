@@ -41,10 +41,7 @@ impl HarnessRuntime {
                 }));
             }
 
-            console.init(
-                "TODO: add title?".to_string(),
-                console_setup,
-            );
+            console.init("TODO: add title?".to_string(), console_setup);
 
             // Iterate through all the jobs waiting for them to complete
             let mut results = vec![vec![]; groups.len()];

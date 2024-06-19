@@ -8,10 +8,10 @@ use archway_proto::cosmos::gov::v1beta1::{
 use pbjson_types::Any;
 use test_tube::{fn_execute, fn_query, Account, RunnerError, RunnerExecuteResult, SigningAccount};
 
+use crate::module::type_url;
 use crate::ArchwayApp;
 use test_tube::module::Module;
 use test_tube::runner::Runner;
-use crate::module::type_url;
 
 pub struct Gov<'a, R: Runner<'a>> {
     runner: &'a R,
@@ -57,7 +57,8 @@ where
                     type_url: type_url(&msg_type_url),
                     value: msg
                         .to_bytes()
-                        .map_err(|e| RunnerError::EncodeError(e.into()))?.into(),
+                        .map_err(|e| RunnerError::EncodeError(e.into()))?
+                        .into(),
                 }),
                 initial_deposit: initial_deposit
                     .into_iter()
@@ -116,7 +117,8 @@ impl<'a> GovWithAppAccess<'a> {
                     type_url: format!("/{}", msg_type_url),
                     value: msg
                         .to_bytes()
-                        .map_err(|e| RunnerError::EncodeError(e.into()))?.into(),
+                        .map_err(|e| RunnerError::EncodeError(e.into()))?
+                        .into(),
                 }),
                 initial_deposit: min_deposit,
                 proposer,
@@ -153,8 +155,7 @@ impl<'a> GovWithAppAccess<'a> {
             .expect("voting period must exist");
 
         // increase time to pass voting period
-        self.app
-            .increase_time(voting_period.seconds as u64 + 1);
+        self.app.increase_time(voting_period.seconds as u64 + 1);
 
         Ok(submit_proposal_res)
     }

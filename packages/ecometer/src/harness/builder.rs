@@ -111,7 +111,8 @@ impl HarnessBuilder {
             self.groups,
             self.jobs,
             self.console.unwrap_or(ConsoleSettings::default().build()),
-            self.storage.unwrap_or(Box::new(GenericStorage::save_last("./litmus"))),
+            self.storage
+                .unwrap_or(Box::new(GenericStorage::save_last("./litmus"))),
             self.graphs,
             tokio_builder,
         )

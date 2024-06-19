@@ -15,8 +15,8 @@ impl<'a, R: Runner<'a>> Module<'a, R> for Bank<'a, R> {
 }
 
 impl<'a, R> Bank<'a, R>
-    where
-        R: Runner<'a>,
+where
+    R: Runner<'a>,
 {
     fn_execute! {
         pub send: MsgSend["/cosmos.bank.v1beta1.MsgSend"] => MsgSendResponse

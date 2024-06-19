@@ -1,4 +1,12 @@
-use archway_proto::archway::rewards::v1::{MsgSetContractMetadata, MsgSetContractMetadataResponse, MsgSetFlatFee, MsgSetFlatFeeResponse, MsgWithdrawRewards, MsgWithdrawRewardsResponse, QueryBlockRewardsTrackingRequest, QueryBlockRewardsTrackingResponse, QueryContractMetadataRequest, QueryContractMetadataResponse, QueryEstimateTxFeesRequest, QueryEstimateTxFeesResponse, QueryFlatFeeRequest, QueryFlatFeeResponse, QueryOutstandingRewardsRequest, QueryOutstandingRewardsResponse, QueryRewardsPoolRequest, QueryRewardsPoolResponse, QueryRewardsRecordsRequest, QueryRewardsRecordsResponse};
+use archway_proto::archway::rewards::v1::{
+    MsgSetContractMetadata, MsgSetContractMetadataResponse, MsgSetFlatFee, MsgSetFlatFeeResponse,
+    MsgWithdrawRewards, MsgWithdrawRewardsResponse, QueryBlockRewardsTrackingRequest,
+    QueryBlockRewardsTrackingResponse, QueryContractMetadataRequest, QueryContractMetadataResponse,
+    QueryEstimateTxFeesRequest, QueryEstimateTxFeesResponse, QueryFlatFeeRequest,
+    QueryFlatFeeResponse, QueryOutstandingRewardsRequest, QueryOutstandingRewardsResponse,
+    QueryRewardsPoolRequest, QueryRewardsPoolResponse, QueryRewardsRecordsRequest,
+    QueryRewardsRecordsResponse,
+};
 use test_tube::{fn_execute, fn_query, Module, Runner};
 
 pub struct Rewards<'a, R: Runner<'a>> {
@@ -12,8 +20,8 @@ impl<'a, R: Runner<'a>> Module<'a, R> for Rewards<'a, R> {
 }
 
 impl<'a, R> Rewards<'a, R>
-    where
-        R: Runner<'a>,
+where
+    R: Runner<'a>,
 {
     fn_query! {
         pub query_contract_metadata ["/archway.rewards.v1.Query/ContractMetadata"]: QueryContractMetadataRequest => QueryContractMetadataResponse

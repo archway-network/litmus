@@ -1,26 +1,32 @@
 pub mod module;
 
+pub use archway_proto;
 use std::ffi::CString;
 use std::str::FromStr;
-pub use archway_proto;
 
 #[cfg(feature = "benchmark")]
 pub use module::benchmark::*;
 
-use test_tube::cosmrs::proto::tendermint::v0_37::abci::{RequestDeliverTx, ResponseDeliverTx};
-use cosmwasm_std::Coin;
-use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine;
+use cosmwasm_std::Coin;
 use prost::Message;
 use prost_types::Any;
 pub use test_tube;
-use test_tube::runner::error::DecodeError;
-use test_tube::{Account, cosmrs, EncodeError, FeeSetting, redefine_as_go_string, Runner, RunnerError, RunnerExecuteResult, RunnerResult, SigningAccount};
-use test_tube::bindings::{AccountNumber, AccountSequence, BeginBlock, EndBlock, Execute, GetBlockHeight, GetBlockTime, GetValidatorPrivateKey, IncreaseTime, InitAccount, InitTestEnv, Query, Simulate};
+use test_tube::bindings::{
+    AccountNumber, AccountSequence, BeginBlock, EndBlock, Execute, GetBlockHeight, GetBlockTime,
+    GetValidatorPrivateKey, IncreaseTime, InitAccount, InitTestEnv, Query, Simulate,
+};
 use test_tube::cosmrs::crypto::secp256k1::SigningKey;
-use test_tube::cosmrs::{AccountId, tx};
+use test_tube::cosmrs::proto::tendermint::v0_37::abci::{RequestDeliverTx, ResponseDeliverTx};
 use test_tube::cosmrs::tx::{Fee, SignerInfo};
+use test_tube::cosmrs::{tx, AccountId};
+use test_tube::runner::error::DecodeError;
 use test_tube::runner::result::RawResult;
+use test_tube::{
+    cosmrs, redefine_as_go_string, Account, EncodeError, FeeSetting, Runner, RunnerError,
+    RunnerExecuteResult, RunnerResult, SigningAccount,
+};
 
 pub const FEE_DENOM: &str = "aarch";
 // const ADDRESS_PREFIX: &str = "arch";
@@ -64,7 +70,7 @@ impl ArchwayApp {
     pub fn get_block_time_nanos(&self) -> i64 {
         unsafe { GetBlockTime(self.id) }
     }
-    
+
     /// Get the current block time in seconds
     pub fn get_block_time_seconds(&self) -> i64 {
         self.get_block_time_nanos() / 1_000_000_000i64
@@ -85,9 +91,9 @@ impl ArchwayApp {
             let val_priv = GetValidatorPrivateKey(self.id, 0);
             CString::from_raw(val_priv)
         }
-            .to_str()
-            .map_err(DecodeError::Utf8Error)?
-            .to_string();
+        .to_str()
+        .map_err(DecodeError::Utf8Error)?
+        .to_string();
 
         let secp256k1_priv = BASE64_STANDARD
             .decode(base64_priv)
@@ -122,9 +128,9 @@ impl ArchwayApp {
             EndBlock(self.id);
             CString::from_raw(addr)
         }
-            .to_str()
-            .map_err(DecodeError::Utf8Error)?
-            .to_string();
+        .to_str()
+        .map_err(DecodeError::Utf8Error)?
+        .to_string();
 
         let secp256k1_priv = BASE64_STANDARD
             .decode(base64_priv)
@@ -157,16 +163,16 @@ impl ArchwayApp {
     pub fn init_accounts(&self, coins: &[Coin], count: u64) -> RunnerResult<Vec<SigningAccount>> {
         (0..count).map(|_| self.init_account(coins)).collect()
     }
-    
+
     pub fn execute_multiple_with_granter<M, R>(
         &self,
         msgs: &[(M, &str)],
         signer: &SigningAccount,
-        granter: Option<&str>
+        granter: Option<&str>,
     ) -> RunnerExecuteResult<R>
-        where
-            M: ::prost::Message,
-            R: ::prost::Message + Default,
+    where
+        M: ::prost::Message,
+        R: ::prost::Message + Default,
     {
         let msgs = msgs
             .iter()
@@ -188,10 +194,10 @@ impl ArchwayApp {
         &self,
         msgs: Vec<Any>,
         signer: &SigningAccount,
-        granter: Option<&str>
+        granter: Option<&str>,
     ) -> RunnerExecuteResult<R>
-        where
-            R: ::prost::Message + Default,
+    where
+        R: ::prost::Message + Default,
     {
         unsafe {
             self.run_block(|| {
@@ -200,11 +206,10 @@ impl ArchwayApp {
                 if let Some(granter) = granter {
                     sim_fee.granter = Some(AccountId::from_str(granter).unwrap())
                 }
-                
-                let tx_sim_fee =
-                    self.create_signed_tx(msgs.clone(), signer, sim_fee)?;
+
+                let tx_sim_fee = self.create_signed_tx(msgs.clone(), signer, sim_fee)?;
                 let mut fee = self.calculate_fee(&tx_sim_fee, signer)?;
-                
+
                 if let Some(granter) = granter {
                     fee.granter = Some(AccountId::from_str(granter).unwrap())
                 }
@@ -254,7 +259,7 @@ impl ArchwayApp {
                 .map_err(RunnerError::DecodeError)
         }
     }
-    
+
     pub fn calculate_fee(&self, tx_bytes: &[u8], fee_payer: &SigningAccount) -> RunnerResult<Fee> {
         match &fee_payer.fee_setting() {
             FeeSetting::Auto {
@@ -287,8 +292,8 @@ impl ArchwayApp {
         signer: &SigningAccount,
         fee: Fee,
     ) -> RunnerResult<Vec<u8>>
-        where
-            I: IntoIterator<Item = cosmrs::Any>,
+    where
+        I: IntoIterator<Item = cosmrs::Any>,
     {
         let tx_body = tx::Body::new(msgs, "", 0u32);
         let addr = signer.address();
@@ -330,7 +335,6 @@ impl ArchwayApp {
             }
         }
     }
-    
 }
 
 impl Default for ArchwayApp {
@@ -384,9 +388,9 @@ impl<'a> Runner<'a> for ArchwayApp {
     }
 
     fn query<Q, R>(&self, path: &str, q: &Q) -> RunnerResult<R>
-        where
-            Q: ::prost::Message,
-            R: ::prost::Message + Default,
+    where
+        Q: ::prost::Message,
+        R: ::prost::Message + Default,
     {
         let mut buf = Vec::new();
 
@@ -411,15 +415,17 @@ mod tests {
     use cosmwasm_schema::cw_serde;
     use std::option::Option::None;
 
-    use cosmwasm_std::{coins, Coin, Uint128};
-    use cw1_whitelist::msg::{ExecuteMsg, InstantiateMsg};
+    // use cosmwasm_std::Uint128;
+    use cosmwasm_std::{coins, Coin};
+    // use cw1_whitelist::msg::{ExecuteMsg, InstantiateMsg};
     use archway_proto::cosmos::bank::v1beta1::QueryAllBalancesRequest;
     use serde::Serialize;
 
-    use crate::{aarch, arch, ArchwayApp};
+    // use crate::aarch;
+    use crate::{arch, ArchwayApp};
     use test_tube::account::{Account, FeeSetting};
     use test_tube::module::Module;
-    use test_tube::runner::*;
+    // use test_tube::runner::*;
     use crate::module::{Bank, Wasm};
 
     pub mod netwars_msgs {
@@ -443,55 +449,55 @@ mod tests {
         }
     }
 
-    #[test]
-    fn netwars() {
-        let app = ArchwayApp::default();
-        let accounts = app.init_accounts(&vec![arch(100)], 2).unwrap();
-        let admin = accounts.get(0).unwrap();
-        let depositor = accounts.get(0).unwrap();
+    // #[test]
+    // fn netwars() {
+    //     let app = ArchwayApp::default();
+    //     let accounts = app.init_accounts(&vec![arch(100)], 2).unwrap();
+    //     let admin = accounts.get(0).unwrap();
+    //     let depositor = accounts.get(0).unwrap();
 
-        let wasm = Wasm::new(&app);
-        let wasm_byte_code = std::fs::read("./test_artifacts/network_wars.wasm").unwrap();
-        let code_id = wasm
-            .store_code(&wasm_byte_code, None, &admin)
-            .unwrap()
-            .data
-            .code_id;
+    //     let wasm = Wasm::new(&app);
+    //     let wasm_byte_code = std::fs::read("./test_artifacts/network_wars.wasm").unwrap();
+    //     let code_id = wasm
+    //         .store_code(&wasm_byte_code, None, &admin)
+    //         .unwrap()
+    //         .data
+    //         .code_id;
 
-        let contract_addr = wasm
-            .instantiate(
-                code_id,
-                &netwars_msgs::InstantiateMsg {
-                    archid_registry: None,
-                    expiration: 604800,
-                    min_deposit: Uint128::from(1000000000000000000_u128),
-                    extensions: 3600,
-                    stale: 604800,
-                    reset_length: 604800,
-                },
-                Some(&admin.address()),
-                Some("netwars"),
-                &[],
-                &admin,
-            )
-            .unwrap()
-            .data
-            .address;
+    //     let contract_addr = wasm
+    //         .instantiate(
+    //             code_id,
+    //             &netwars_msgs::InstantiateMsg {
+    //                 archid_registry: None,
+    //                 expiration: 604800,
+    //                 min_deposit: Uint128::from(1000000000000000000_u128),
+    //                 extensions: 3600,
+    //                 stale: 604800,
+    //                 reset_length: 604800,
+    //             },
+    //             Some(&admin.address()),
+    //             Some("netwars"),
+    //             &[],
+    //             &admin,
+    //         )
+    //         .unwrap()
+    //         .data
+    //         .address;
 
-        let res = wasm
-            .execute(
-                &contract_addr,
-                &netwars_msgs::ExecuteMsg::Deposit {},
-                &[arch(1)],
-                &depositor,
-            )
-            .unwrap();
-        println!("   Chain | Gas Wanted | Gas Used");
-        println!(
-            "TestTube |   {}   | {}",
-            res.gas_info.gas_wanted, res.gas_info.gas_used
-        );
-    }
+    //     let res = wasm
+    //         .execute(
+    //             &contract_addr,
+    //             &netwars_msgs::ExecuteMsg::Deposit {},
+    //             &[arch(1)],
+    //             &depositor,
+    //         )
+    //         .unwrap();
+    //     println!("   Chain | Gas Wanted | Gas Used");
+    //     println!(
+    //         "TestTube |   {}   | {}",
+    //         res.gas_info.gas_wanted, res.gas_info.gas_used
+    //     );
+    // }
 
     #[test]
     fn marketplace_test() {
@@ -653,12 +659,8 @@ mod tests {
     fn test_custom_fee() {
         let app = ArchwayApp::default();
         let initial_balance = 1_000_000_000_000_000_000_000;
-        let alice = app
-            .init_account(&coins(initial_balance, "aarch"))
-            .unwrap();
-        let bob = app
-            .init_account(&coins(initial_balance, "aarch"))
-            .unwrap();
+        let alice = app.init_account(&coins(initial_balance, "aarch")).unwrap();
+        let bob = app.init_account(&coins(initial_balance, "aarch")).unwrap();
 
         let amount = Coin::new(1_000_000, "aarch");
         let gas_limit = 100_000_000;

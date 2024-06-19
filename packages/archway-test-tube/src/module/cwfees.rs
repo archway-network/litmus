@@ -1,4 +1,7 @@
-use archway_proto::archway::cwfees::v1::{IsGrantingContractRequest, IsGrantingContractResponse, MsgRegisterAsGranter, MsgRegisterAsGranterResponse, MsgUnregisterAsGranter, MsgUnregisterAsGranterResponse};
+use archway_proto::archway::cwfees::v1::{
+    IsGrantingContractRequest, IsGrantingContractResponse, MsgRegisterAsGranter,
+    MsgRegisterAsGranterResponse, MsgUnregisterAsGranter, MsgUnregisterAsGranterResponse,
+};
 use test_tube::{fn_execute, fn_query, Module, Runner};
 
 pub struct CwFees<'a, R: Runner<'a>> {
@@ -12,8 +15,8 @@ impl<'a, R: Runner<'a>> Module<'a, R> for CwFees<'a, R> {
 }
 
 impl<'a, R> CwFees<'a, R>
-    where
-        R: Runner<'a>,
+where
+    R: Runner<'a>,
 {
     fn_query! {
         pub is_granting_contract ["/archway.cwfees.v1.Query/IsGrantingContract"]: IsGrantingContractRequest => IsGrantingContractResponse
