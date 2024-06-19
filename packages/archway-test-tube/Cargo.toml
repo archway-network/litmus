@@ -23,7 +23,6 @@ base64 = "0.21.5"
 [dev-dependencies]
 cw1-whitelist = "1.1.2"
 cosmwasm-schema = "2.0.1"
-#network-wars = { git = "https://github.com/drewstaylor/fomo", features = ["library"] }
 
 [build-dependencies]
 bindgen = "0.69.1"
