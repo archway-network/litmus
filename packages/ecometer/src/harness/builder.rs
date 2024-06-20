@@ -15,6 +15,12 @@ pub struct HarnessBuilder {
     pub(crate) graphs: Vec<Box<dyn Graph>>,
 }
 
+impl Default for HarnessBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HarnessBuilder {
     pub fn new() -> Self {
         Self {
@@ -104,7 +110,7 @@ impl HarnessBuilder {
 
     pub fn custom_build(mut self, tokio_builder: Builder) -> HarnessRuntime {
         if self.graphs.is_empty() {
-            self.graphs.push(Box::new(LinearGraph::default()));
+            self.graphs.push(Box::<LinearGraph>::default());
         }
 
         HarnessRuntime::new(

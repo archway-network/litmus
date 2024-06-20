@@ -69,7 +69,7 @@ impl Storage for GenericStorage {
         path.pop();
 
         // Load storage
-        let mut config = if let Some(file) = File::open(&config_path).ok() {
+        let mut config = if let Ok(file) = File::open(&config_path) {
             let cfg: BTreeMap<String, Vec<FinalizedGroup>> =
                 serde_json::from_reader(BufReader::new(&file)).unwrap();
             cfg
@@ -207,7 +207,7 @@ impl Graph for LinearGraph {
         let mut ctx = ChartBuilder::on(&area)
             .set_label_area_size(LabelAreaPosition::Left, self.left_label_size)
             .set_label_area_size(LabelAreaPosition::Bottom, self.bottom_label_size)
-            .caption(&group, ("sans-serif", self.caption_size))
+            .caption(group, ("sans-serif", self.caption_size))
             .build_cartesian_2d(x_spec, y_spec)
             .unwrap();
 
@@ -307,11 +307,11 @@ impl LinearGraph {
         let size_difference = (max_gas - min_gas) / 4;
         // Avoid bugs
         if size_difference <= 1 || min_gas == max_gas {
-            min_gas = min_gas.checked_sub(padding as u128).unwrap_or(0);
+            min_gas = min_gas.saturating_sub(padding as u128);
             max_gas = max_gas.checked_add(padding as u128).unwrap_or(u128::MAX);
         }
 
-        (min_gas.checked_sub(size_difference).unwrap_or(0))
+        (min_gas.saturating_sub(size_difference))
             ..max_gas.checked_add(size_difference).unwrap_or(u128::MAX)
     }
 }

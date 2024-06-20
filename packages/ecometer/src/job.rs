@@ -29,18 +29,24 @@ pub trait Job: Send + Sync {
 }
 
 // A single threaded group, app state is saved across benches
-pub struct Continuous<STATE, PARAM, MSG>
+pub struct Continuous<SETUP, UPDATE, STATE, PARAM, MSG>
 where
+    SETUP: Fn(&ArchwayApp) -> STATE + Send + Sync,
+    UPDATE: Fn(&ArchwayApp, &mut STATE, &PARAM) -> Setup<MSG> + 'static + Send + Sync,
     PARAM: Send + Sync,
 {
     pub id: usize,
     pub parameters: Vec<PARAM>,
-    pub setup: Box<dyn Fn(&ArchwayApp) -> STATE + Send + Sync>,
-    pub update: Box<dyn Fn(&ArchwayApp, &mut STATE, &PARAM) -> Setup<MSG> + Send + Sync>,
+    pub setup: Box<SETUP>,
+    pub update: Box<UPDATE>,
 }
 
-impl<STATE, PARAM: Naming + Send + Sync, MSG: Sized + Serialize + Send + Sync> Job
-    for Continuous<STATE, PARAM, MSG>
+impl<SETUP, UPDATE, STATE, PARAM, MSG> Job for Continuous<SETUP, UPDATE, STATE, PARAM, MSG>
+where
+    SETUP: Fn(&ArchwayApp) -> STATE + Send + Sync,
+    UPDATE: Fn(&ArchwayApp, &mut STATE, &PARAM) -> Setup<MSG> + 'static + Send + Sync,
+    PARAM: Naming + Send + Sync,
+    MSG: Sized + Serialize + Send + Sync,
 {
     fn set_group_id(&mut self, id: usize) {
         self.id = id;
@@ -68,16 +74,22 @@ impl<STATE, PARAM: Naming + Send + Sync, MSG: Sized + Serialize + Send + Sync> J
 }
 
 // A multithreaded group, each bench has an individual app state
-pub struct Independent<PARAM, MSG>
+pub struct Independent<SETUP, PARAM, MSG>
 where
+    SETUP: Fn(&ArchwayApp, &PARAM) -> Setup<MSG> + Send + Sync,
     PARAM: Send,
 {
     pub id: usize,
     pub parameters: PARAM,
-    pub setup: Box<dyn Fn(&ArchwayApp, &PARAM) -> Setup<MSG> + Send + Sync>,
+    pub setup: Box<SETUP>,
 }
 
-impl<PARAM: Naming + Send + Sync, MSG: Sized + Serialize> Job for Independent<PARAM, MSG> {
+impl<SETUP, PARAM, MSG> Job for Independent<SETUP, PARAM, MSG>
+where
+    SETUP: Fn(&ArchwayApp, &PARAM) -> Setup<MSG> + Send + Sync,
+    PARAM: Naming + Send + Sync,
+    MSG: Sized + Serialize,
+{
     fn set_group_id(&mut self, id: usize) {
         self.id = id;
     }
@@ -102,8 +114,7 @@ fn get_balance_as_aarch(bank: Bank<ArchwayApp>, addr: &SigningAccount) -> u128 {
         denom: FEE_DENOM.to_string(),
     })
     .ok()
-    .map(|r| r.balance.map(|c| c.amount.parse::<u128>().unwrap()))
-    .flatten()
+    .and_then(|r| r.balance.map(|c| c.amount.parse::<u128>().unwrap()))
     .unwrap_or(0)
 }
 
