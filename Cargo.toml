@@ -1,34 +1,4 @@
-[package]
-name = "archway_test_tube"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+members = ["packages/*"]
 
-exclude = ["archway", "test_artifacts"]
-
-[features]
-default = []
-benchmark = ["plotters", "indicatif", "console"]
-wasm-sudo = ["test-tube/wasm-sudo"]
-
-[dependencies]
-# Using local branch while test-tubes until the source stops making breaking changes
-test-tube = { git ="https://github.com/FloppyDisck/test-tube.git", features = ["module-wrappers"] }
-archway-proto = "=0.1.0"
-cosmos-sdk-proto = "=0.21.1"
-cosmrs = {version = "=0.15.0", features = ["cosmwasm"]}
-cosmwasm-std = "^1.2"
-osmosis-std = "=0.22.0"
-prost = "^0.12.3"
-serde = "^1.0"
-serde_json = "^1.0"
-plotters = { version = "0.3.5", optional = true }
-indicatif = { version = "0.17.8", optional = true }
-console = { version = "0.15.8", optional = true }
-
-[dev-dependencies]
-cw1-whitelist = "2.0.0"
-cosmwasm-schema = "2.0.1"
-#network-wars = { git = "https://github.com/drewstaylor/fomo", features = ["library"] }
-
-[build-dependencies]
-bindgen = "0.69.1"
+resolver = "2"

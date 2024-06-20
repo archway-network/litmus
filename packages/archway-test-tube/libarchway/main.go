@@ -18,7 +18,6 @@ import (
 	abci "github.com/cometbft/cometbft/abci/types"
 
 	// cosmos sdk
-
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -31,8 +30,6 @@ import (
 	// cosmwasm-testing
 	"github.com/FloppyDisck/archway-test-tube/result"
 	"github.com/FloppyDisck/archway-test-tube/testenv"
-	// osmosis
-	// lockuptypes "github.com/osmosis-labs/osmosis/v16/x/lockup/types"
 )
 
 var (
