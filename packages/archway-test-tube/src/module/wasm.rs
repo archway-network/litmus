@@ -1,8 +1,8 @@
 use crate::module::type_url;
 use archway_proto::cosmwasm::wasm::v1::{
     AccessConfig, MsgExecuteContract, MsgExecuteContractResponse, MsgInstantiateContract,
-    MsgInstantiateContractResponse, MsgStoreCode, MsgStoreCodeResponse,
-    QuerySmartContractStateRequest, QuerySmartContractStateResponse,
+    MsgInstantiateContractResponse, MsgMigrateContract, MsgMigrateContractResponse, MsgStoreCode,
+    MsgStoreCodeResponse, QuerySmartContractStateRequest, QuerySmartContractStateResponse,
 };
 use cosmwasm_std::Coin;
 use prost::Name;
@@ -39,6 +39,28 @@ where
                 instantiate_permission,
             },
             &type_url(&MsgStoreCode::full_name()),
+            signer,
+        )
+    }
+
+    pub fn migrate<M>(
+        &self,
+        contract: String,
+        code_id: u64,
+        msg: &M,
+        signer: &SigningAccount,
+    ) -> RunnerExecuteResult<MsgMigrateContractResponse>
+    where
+        M: ?Sized + Serialize,
+    {
+        self.runner.execute(
+            MsgMigrateContract {
+                sender: signer.address(),
+                contract,
+                code_id,
+                msg: serde_json::to_vec(msg).map_err(EncodeError::JsonEncodeError)?,
+            },
+            &type_url(&MsgMigrateContract::full_name()),
             signer,
         )
     }
