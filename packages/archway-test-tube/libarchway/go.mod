@@ -1,6 +1,6 @@
 module github.com/FloppyDisck/archway-test-tube
 
-go 1.22
+go 1.22.1
 
 require (
 	cosmossdk.io/api v0.7.0 // indirect
