@@ -719,6 +719,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "demo_contract"
+version = "0.1.0"
+dependencies = [
+ "cosmwasm-schema 1.5.5",
+ "cosmwasm-std",
+ "cw-storage-plus",
+ "schemars",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "der"
 version = "0.7.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"

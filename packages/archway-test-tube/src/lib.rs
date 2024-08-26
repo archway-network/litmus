@@ -86,6 +86,21 @@ impl ArchwayApp {
         }
     }
 
+    /// Submits an empty block to the chain
+    pub fn skip_block(&self) {
+        unsafe {
+            BeginBlock(self.id);
+            EndBlock(self.id);
+        }
+    }
+
+    /// Submits multiple empty blocks to the chain
+    pub fn skip_blocks(&self, blocks: u64) {
+        for _ in 0..blocks {
+            self.skip_block()
+        }
+    }
+
     pub fn get_first_validator_signing_account(&self) -> RunnerResult<SigningAccount> {
         let base64_priv = unsafe {
             let val_priv = GetValidatorPrivateKey(self.id, 0);
@@ -695,5 +710,20 @@ mod tests {
 
         assert_eq!(res.gas_info.gas_wanted, gas_limit);
         assert_eq!(bob_balance, initial_balance - amount.amount.u128());
+    }
+
+    #[test]
+    fn test_block_skipping() {
+        let app = ArchwayApp::default();
+
+        assert_eq!(app.get_block_height(), 1i64);
+
+        app.skip_block();
+
+        assert_eq!(app.get_block_height(), 2i64);
+
+        app.skip_blocks(5);
+
+        assert_eq!(app.get_block_height(), 7i64);
     }
 }
