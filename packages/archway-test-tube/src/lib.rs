@@ -1,12 +1,16 @@
+mod bindings;
 pub mod module;
 
 pub use archway_proto;
+use archway_proto::tendermint::abci::{ExecTxResult, ResponseFinalizeBlock};
+#[cfg(feature = "benchmark")]
+pub use module::benchmark::*;
 use std::ffi::CString;
 use std::str::FromStr;
 
-#[cfg(feature = "benchmark")]
-pub use module::benchmark::*;
+// TODO: add a with_module::<Wasm>(FnOnce(msg) -> Response) -> Response
 
+use crate::bindings::{EndBlock, Execute};
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
 use cosmwasm_std::Coin;
@@ -14,18 +18,20 @@ use prost::Message;
 use prost_types::Any;
 pub use test_tube;
 use test_tube::bindings::{
-    AccountNumber, AccountSequence, BeginBlock, EndBlock, Execute, GetBlockHeight, GetBlockTime,
+    AccountNumber, AccountSequence, BeginBlock, GetBlockHeight, GetBlockTime,
     GetValidatorPrivateKey, IncreaseTime, InitAccount, InitTestEnv, Query, Simulate,
 };
 use test_tube::cosmrs::crypto::secp256k1::SigningKey;
-use test_tube::cosmrs::proto::tendermint::v0_37::abci::{RequestDeliverTx, ResponseDeliverTx};
+use test_tube::cosmrs::proto::tendermint::v0_37::abci::{
+    Event, EventAttribute, RequestDeliverTx, ResponseDeliverTx,
+};
 use test_tube::cosmrs::tx::{Fee, SignerInfo};
 use test_tube::cosmrs::{tx, AccountId};
 use test_tube::runner::error::DecodeError;
 use test_tube::runner::result::RawResult;
 use test_tube::{
-    cosmrs, redefine_as_go_string, Account, EncodeError, FeeSetting, Runner, RunnerError,
-    RunnerExecuteResult, RunnerResult, SigningAccount,
+    cosmrs, redefine_as_go_string, Account, EncodeError, ExecuteResponse, FeeSetting, Runner,
+    RunnerError, RunnerExecuteResult, RunnerResult, SigningAccount,
 };
 
 pub const FEE_DENOM: &str = "aarch";
@@ -43,6 +49,38 @@ pub fn aarch(amount: u128) -> Coin {
 
 pub fn arch(amount: u128) -> Coin {
     aarch(amount * 10u128.pow(18))
+}
+
+fn convert_to_response_deliver_tx(res: ExecTxResult) -> ResponseDeliverTx {
+    let mut events = Vec::with_capacity(res.events.len());
+
+    for event in res.events {
+        let mut attrs = Vec::with_capacity(event.attributes.len());
+
+        for attr in event.attributes {
+            attrs.push(EventAttribute {
+                key: attr.key,
+                value: attr.value,
+                index: attr.index,
+            })
+        }
+
+        events.push(Event {
+            r#type: event.r#type.clone(),
+            attributes: attrs,
+        })
+    }
+
+    ResponseDeliverTx {
+        code: res.code,
+        data: res.data,
+        log: res.log,
+        info: res.info,
+        gas_wanted: res.gas_wanted,
+        gas_used: res.gas_used,
+        events,
+        codespace: res.codespace,
+    }
 }
 
 pub struct ArchwayApp {
@@ -215,7 +253,7 @@ impl ArchwayApp {
         R: ::prost::Message + Default,
     {
         unsafe {
-            self.run_block(|| {
+            let res = self.run_block(|| {
                 // Set granter for the sim fee
                 let mut sim_fee = self.default_simulation_fee();
                 if let Some(granter) = granter {
@@ -238,13 +276,12 @@ impl ArchwayApp {
                 let base64_req = BASE64_STANDARD.encode(buf);
                 redefine_as_go_string!(base64_req);
 
-                let res = Execute(self.id, base64_req);
-                let res = RawResult::from_non_null_ptr(res).into_result()?;
+                Execute(self.id, base64_req);
+                Ok(())
+            });
 
-                ResponseDeliverTx::decode(res.as_slice())
-                    .map_err(DecodeError::ProtoDecodeError)?
-                    .try_into()
-            })
+            res.map(|res| convert_to_response_deliver_tx(res.tx_results.first().unwrap().clone()))?
+                .try_into()
         }
     }
 
@@ -337,17 +374,18 @@ impl ArchwayApp {
             .map_err(RunnerError::EncodeError)
     }
 
-    unsafe fn run_block<T, E>(&self, execution: impl Fn() -> Result<T, E>) -> Result<T, E> {
+    unsafe fn run_block(
+        &self,
+        execution: impl Fn() -> Result<(), RunnerError>,
+    ) -> Result<ResponseFinalizeBlock, RunnerError> {
         unsafe { BeginBlock(self.id) };
-        match execution() {
-            ok @ Ok(_) => {
-                unsafe { EndBlock(self.id) };
-                ok
-            }
-            err @ Err(_) => {
-                unsafe { EndBlock(self.id) };
-                err
-            }
+        execution()?;
+        unsafe {
+            let res = EndBlock(self.id);
+            let res = RawResult::from_non_null_ptr(res).into_result()?;
+
+            ResponseFinalizeBlock::decode(res.as_slice())
+                .map_err(|err| RunnerError::DecodeError(DecodeError::ProtoDecodeError(err)))
         }
     }
 }
@@ -384,7 +422,7 @@ impl<'a> Runner<'a> for ArchwayApp {
 
     fn execute_tx(&self, tx_bytes: &[u8]) -> RunnerResult<ResponseDeliverTx> {
         unsafe {
-            self.run_block(|| {
+            let res = self.run_block(|| {
                 let request_devlier_tx = RequestDeliverTx {
                     tx: tx_bytes.to_vec().into(),
                 };
@@ -392,13 +430,11 @@ impl<'a> Runner<'a> for ArchwayApp {
                 let base64_req = BASE64_STANDARD.encode(request_devlier_tx.encode_to_vec());
                 redefine_as_go_string!(base64_req);
 
-                let res = Execute(self.id, base64_req);
-                let res = RawResult::from_non_null_ptr(res).into_result()?;
+                Execute(self.id, base64_req);
+                Ok(())
+            });
 
-                ResponseDeliverTx::decode(res.as_slice())
-                    .map_err(DecodeError::ProtoDecodeError)
-                    .map_err(Into::into)
-            })
+            res.map(|res| convert_to_response_deliver_tx(res.tx_results.first().unwrap().clone()))
         }
     }
 

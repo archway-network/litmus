@@ -71,11 +71,11 @@ func InitTestEnv() uint64 {
 	wasmtypes.MaxWasmSize = 1024 * 1024 * 1024 * 1024 * 1024
 
 	env.BeginNewBlock(false, 5)
-	env.FundValidators()
+	//env.FundValidators()
 
-	reqEndBlock := abci.RequestEndBlock{Height: env.Ctx.BlockHeight()}
-	env.App.EndBlock(reqEndBlock)
-	env.App.Commit()
+	//reqEndBlock := abci.RequestEndBlock{Height: env.Ctx.BlockHeight()}
+	//env.App.EndBlock(reqEndBlock)
+	env.EndBlock()
 
 	envRegister.Store(id, *env)
 
@@ -121,7 +121,7 @@ func InitAccount(envId uint64, coinsJson string) *C.char {
 
 	}
 
-	err := banktestutil.FundAccount(env.App.Keepers.BankKeeper, env.Ctx, accAddr, coins)
+	err := banktestutil.FundAccount(env.Ctx, env.App.Keepers.BankKeeper, accAddr, coins)
 	if err != nil {
 		panic(errors.Wrapf(err, "Failed to fund account"))
 	}
@@ -149,12 +149,15 @@ func BeginBlock(envId uint64) {
 }
 
 //export EndBlock
-func EndBlock(envId uint64) {
+func EndBlock(envId uint64) *C.char {
 	env := loadEnv(envId)
-	reqEndBlock := abci.RequestEndBlock{Height: env.Ctx.BlockHeight()}
-	env.App.EndBlock(reqEndBlock)
-	env.App.Commit()
+	res := env.EndBlock()
+
 	envRegister.Store(envId, env)
+
+	p, _ := proto.Marshal(res)
+
+	return encodeBytesResultBytes(p)
 }
 
 //export WasmSudo
@@ -182,33 +185,20 @@ func WasmSudo(envId uint64, bech32Address, msgJson string) *C.char {
 }
 
 //export Execute
-func Execute(envId uint64, base64ReqDeliverTx string) *C.char {
+func Execute(envId uint64, base64Tx string) {
 	env := loadEnv(envId)
 	// Temp fix for concurrency issue
 	mu.Lock()
 	defer mu.Unlock()
 
-	reqDeliverTxBytes, err := base64.StdEncoding.DecodeString(base64ReqDeliverTx)
+	TxBytes, err := base64.StdEncoding.DecodeString(base64Tx)
 	if err != nil {
 		panic(err)
 	}
 
-	reqDeliverTx := abci.RequestDeliverTx{}
-	err = proto.Unmarshal(reqDeliverTxBytes, &reqDeliverTx)
-	if err != nil {
-		return encodeErrToResultBytes(result.ExecuteError, err)
-	}
-
-	resDeliverTx := env.App.DeliverTx(reqDeliverTx)
-	bz, err := proto.Marshal(&resDeliverTx)
-
-	if err != nil {
-		panic(err)
-	}
+	env.Execute(TxBytes)
 
 	envRegister.Store(envId, env)
-
-	return encodeBytesResultBytes(bz)
 }
 
 //export Query
@@ -227,7 +217,7 @@ func Query(envId uint64, path, base64QueryMsgBytes string) *C.char {
 		err := errors.New("No route found for `" + path + "`")
 		return encodeErrToResultBytes(result.QueryError, err)
 	}
-	res, err := route(env.Ctx, req)
+	res, err := route(env.Ctx, &req)
 
 	if err != nil {
 		return encodeErrToResultBytes(result.QueryError, err)

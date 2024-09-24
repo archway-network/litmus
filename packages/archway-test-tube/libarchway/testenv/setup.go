@@ -10,9 +10,9 @@ import (
 
 	// tendermint
 	"cosmossdk.io/errors"
-	dbm "github.com/cometbft/cometbft-db"
+	"cosmossdk.io/log"
 	abci "github.com/cometbft/cometbft/abci/types"
-	"github.com/cometbft/cometbft/libs/log"
+	dbm "github.com/cosmos/cosmos-db"
 
 	// cosmos-sdk
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
@@ -23,7 +23,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	banktestutil "github.com/cosmos/cosmos-sdk/x/bank/testutil"
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
-	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
 	// wasmd
@@ -83,15 +82,15 @@ func GenesisStateWithValSet(appInstance *app.ArchwayApp) (app.GenesisState, secp
 			Jailed:            false,
 			Status:            stakingtypes.Bonded,
 			Tokens:            bondAmt,
-			DelegatorShares:   sdk.OneDec(),
+			DelegatorShares:   sdkmath.LegacyOneDec(),
 			Description:       stakingtypes.Description{},
 			UnbondingHeight:   int64(0),
 			UnbondingTime:     time.Unix(0, 0).UTC(),
-			Commission:        stakingtypes.NewCommission(sdk.ZeroDec(), sdk.ZeroDec(), sdk.ZeroDec()),
+			Commission:        stakingtypes.NewCommission(sdkmath.LegacyZeroDec(), sdkmath.LegacyZeroDec(), sdkmath.LegacyZeroDec()),
 			MinSelfDelegation: sdkmath.ZeroInt(),
 		}
 		validators = append(validators, validator)
-		delegations = append(delegations, stakingtypes.NewDelegation(genAccs[0].GetAddress(), val.Address.Bytes(), sdk.OneDec()))
+		delegations = append(delegations, stakingtypes.NewDelegation(genAccs[0].GetAddress().String(), sdk.ValAddress(val.Address).String(), sdkmath.LegacyOneDec()))
 
 		// add initial validator powers so consumer InitGenesis runs correctly
 		pub, _ := val.ToProto()
@@ -142,9 +141,16 @@ func GenesisStateWithValSet(appInstance *app.ArchwayApp) (app.GenesisState, secp
 type TestEnv struct {
 	App                *app.ArchwayApp
 	Ctx                sdk.Context
+	BlockState         *BlockState
 	ParamTypesRegistry ParamTypeRegistry
 	ValPrivs           []*secp256k1.PrivKey
 	NodeHome           string
+}
+
+type BlockState struct {
+	txs    [][]byte
+	height int64
+	time   time.Time
 }
 
 // DebugAppOptions is a stub implementing AppOptions
@@ -174,7 +180,6 @@ func NewArchwayApp(nodeHome string) *app.ArchwayApp {
 		[]wasmdKeeper.Option{},
 		baseapp.SetChainID("archway-1"),
 	)
-
 }
 
 func InitChain(appInstance *app.ArchwayApp) (sdk.Context, secp256k1.PrivKey) {
@@ -211,7 +216,7 @@ func InitChain(appInstance *app.ArchwayApp) (sdk.Context, secp256k1.PrivKey) {
 	stateBytes = []byte(strings.Replace(string(stateBytes), "\"stake\"", "\"aarch\"", -1))
 
 	appInstance.InitChain(
-		abci.RequestInitChain{
+		&abci.RequestInitChain{
 			Validators:      []abci.ValidatorUpdate{},
 			ConsensusParams: concensusParams,
 			AppStateBytes:   stateBytes,
@@ -219,7 +224,7 @@ func InitChain(appInstance *app.ArchwayApp) (sdk.Context, secp256k1.PrivKey) {
 		},
 	)
 
-	ctx := appInstance.NewContext(false, cmtproto.Header{Height: 0, ChainID: "archway-1", Time: time.Now().UTC()})
+	ctx := appInstance.NewContextLegacy(false, cmtproto.Header{Height: 0, ChainID: "archway-1", Time: time.Now().UTC()})
 
 	// for each stakingGenesisState.Validators
 	for _, validator := range stakingGenesisState.Validators {
@@ -240,40 +245,30 @@ func InitChain(appInstance *app.ArchwayApp) (sdk.Context, secp256k1.PrivKey) {
 }
 
 func (env *TestEnv) BeginNewBlock(executeNextEpoch bool, timeIncreaseSeconds uint64) {
-	validators := env.App.Keepers.StakingKeeper.GetAllValidators(env.Ctx)
-	valAddrFancy, err := validators[0].GetConsAddr()
-	requireNoErr(err)
-	valAddr := valAddrFancy.Bytes()
+	newBlockTime := env.Ctx.BlockTime().Add(time.Duration(timeIncreaseSeconds) * time.Second)
+	if executeNextEpoch {
+		newBlockTime = env.Ctx.BlockTime().Add(time.Second)
+	}
 
-	env.beginNewBlockWithProposer(executeNextEpoch, valAddr, timeIncreaseSeconds)
+	env.Ctx = env.Ctx.WithBlockTime(newBlockTime).WithBlockHeight(env.Ctx.BlockHeight() + 1)
+	env.BlockState = &BlockState{
+		height: env.Ctx.BlockHeight(),
+		time:   env.Ctx.BlockTime(),
+	}
 }
 
 func (env *TestEnv) FundValidators() {
 	for _, valPriv := range env.ValPrivs {
 		valAddr := sdk.AccAddress(valPriv.PubKey().Address())
-		err := banktestutil.FundAccount(env.App.Keepers.BankKeeper, env.Ctx, valAddr.Bytes(), sdk.NewCoins(sdk.NewInt64Coin("aarch", 9223372036854775807)))
+		err := banktestutil.FundAccount(env.Ctx, env.App.Keepers.BankKeeper, valAddr.Bytes(), sdk.NewCoins(sdk.NewInt64Coin("aarch", 9223372036854775807)))
 		if err != nil {
 			panic(errors.Wrapf(err, "Failed to fund account"))
 		}
 	}
 }
 
-func (env *TestEnv) InitValidator() []byte {
-	valPriv, valAddrFancy := env.setupValidator(stakingtypes.Bonded)
-	validator, _ := env.App.Keepers.StakingKeeper.GetValidator(env.Ctx, valAddrFancy)
-	valAddr, _ := validator.GetConsAddr()
-
-	env.ValPrivs = append(env.ValPrivs, valPriv)
-	err := banktestutil.FundAccount(env.App.Keepers.BankKeeper, env.Ctx, valAddrFancy.Bytes(), sdk.NewCoins(sdk.NewInt64Coin("aarch", 9223372036854775807)))
-	if err != nil {
-		panic(errors.Wrapf(err, "Failed to fund account"))
-	}
-
-	return valAddr.Bytes()
-}
-
 func (env *TestEnv) GetValidatorAddresses() []string {
-	validators := env.App.Keepers.StakingKeeper.GetAllValidators(env.Ctx)
+	validators, _ := env.App.Keepers.StakingKeeper.GetAllValidators(env.Ctx)
 	var addresses []string
 	for _, validator := range validators {
 		addresses = append(addresses, validator.OperatorAddress)
@@ -282,94 +277,50 @@ func (env *TestEnv) GetValidatorAddresses() []string {
 	return addresses
 }
 
-// beginNewBlockWithProposer begins a new block with a proposer.
-func (env *TestEnv) beginNewBlockWithProposer(executeNextEpoch bool, proposer sdk.ValAddress, timeIncreaseSeconds uint64) {
-	validator, found := env.App.Keepers.StakingKeeper.GetValidator(env.Ctx, proposer)
-
-	if !found {
-		panic("validator not found")
-	}
-
-	valConsAddr, err := validator.GetConsAddr()
-	requireNoErr(err)
-
-	valAddr := valConsAddr.Bytes()
-
-	//epochIdentifier := env.App.SuperfluidKeeper.GetEpochIdentifier(env.Ctx)
-	//epoch := env.App.EpochsKeeper.GetEpochInfo(env.Ctx, epochIdentifier)
-	newBlockTime := env.Ctx.BlockTime().Add(time.Duration(timeIncreaseSeconds) * time.Second)
-	if executeNextEpoch {
-		//newBlockTime = env.Ctx.BlockTime().Add(epoch.Duration).Add(time.Second)
-		newBlockTime = env.Ctx.BlockTime().Add(time.Second)
-	}
-
-	header := cmtproto.Header{ChainID: "archway-1", Height: env.Ctx.BlockHeight() + 1, Time: newBlockTime}
-	newCtx := env.Ctx.WithBlockTime(newBlockTime).WithBlockHeight(env.Ctx.BlockHeight() + 1)
-	env.Ctx = newCtx
-	lastCommitInfo := abci.CommitInfo{
-		Votes: []abci.VoteInfo{{
-			Validator:       abci.Validator{Address: valAddr, Power: 1000},
-			SignedLastBlock: true,
-		}},
-	}
-	reqBeginBlock := abci.RequestBeginBlock{Header: header, LastCommitInfo: lastCommitInfo}
-
-	env.App.BeginBlock(reqBeginBlock)
-	env.Ctx = env.App.NewContext(false, reqBeginBlock.Header)
+func (env *TestEnv) Execute(tx []byte) {
+	env.BlockState.txs = append(env.BlockState.txs, tx)
 }
 
-func (env *TestEnv) setupValidator(bondStatus stakingtypes.BondStatus) (*secp256k1.PrivKey, sdk.ValAddress) {
-	valPriv := secp256k1.GenPrivKey()
-	valPub := valPriv.PubKey()
-	valAddr := sdk.ValAddress(valPub.Address())
-	bondDenom := env.App.Keepers.StakingKeeper.GetParams(env.Ctx).BondDenom
-	selfBond := sdk.NewCoins(sdk.Coin{Amount: sdk.NewInt(100), Denom: bondDenom})
-
-	err := banktestutil.FundAccount(env.App.Keepers.BankKeeper, env.Ctx, sdk.AccAddress(valPub.Address()), selfBond)
+func (env *TestEnv) EndBlock() *abci.ResponseFinalizeBlock {
+	// Prepare the proposal
+	prepReq := abci.RequestPrepareProposal{
+		MaxTxBytes: int64(1048576),
+		Txs:        env.BlockState.txs,
+		Time:       env.BlockState.time,
+		Height:     env.BlockState.height,
+	}
+	prepResp, err := env.App.PrepareProposal(&prepReq)
 	requireNoErr(err)
 
-	stakingMsgServer := stakingkeeper.NewMsgServerImpl(env.App.Keepers.StakingKeeper)
-	stakingCoin := sdk.NewCoin(bondDenom, selfBond[0].Amount)
-	ZeroCommission := stakingtypes.NewCommissionRates(sdk.ZeroDec(), sdk.ZeroDec(), sdk.ZeroDec())
-	msg, err := stakingtypes.NewMsgCreateValidator(valAddr, valPub, stakingCoin, stakingtypes.Description{}, ZeroCommission, sdk.OneInt())
+	// Process the proposal
+	procReq := abci.RequestProcessProposal{
+		Txs:    prepResp.Txs,
+		Time:   env.BlockState.time,
+		Height: env.BlockState.height,
+	}
+	procResp, err := env.App.ProcessProposal(&procReq)
 	requireNoErr(err)
 
-	res, err := stakingMsgServer.CreateValidator(env.Ctx, msg)
+	if procResp.Status != abci.ResponseProcessProposal_ACCEPT {
+		panic("proposal rejected")
+	}
+
+	// Finalize the block
+	finalReq := abci.RequestFinalizeBlock{
+		Txs:    env.BlockState.txs,
+		Time:   env.BlockState.time,
+		Height: env.BlockState.height,
+	}
+	resp, err := env.App.FinalizeBlock(&finalReq)
 	requireNoErr(err)
-	requireNoNil("staking handler", res)
 
-	env.App.Keepers.BankKeeper.SendCoinsFromModuleToModule(env.Ctx, stakingtypes.NotBondedPoolName, stakingtypes.BondedPoolName, sdk.NewCoins(stakingCoin))
-
-	val, found := env.App.Keepers.StakingKeeper.GetValidator(env.Ctx, valAddr)
-	requierTrue("validator found", found)
-
-	val = val.UpdateStatus(bondStatus)
-	env.App.Keepers.StakingKeeper.SetValidator(env.Ctx, val)
-
-	consAddr, err := val.GetConsAddr()
+	_, err = env.App.Commit()
 	requireNoErr(err)
-	env.setupDefaultValidatorSigningInfo(consAddr)
 
-	return valPriv, valAddr
-}
+	// Reset block state
+	env.BlockState = &BlockState{}
 
-func (env *TestEnv) SetupDefaultValidator() {
-	validators := env.App.Keepers.StakingKeeper.GetAllValidators(env.Ctx)
-	valAddrFancy, err := validators[0].GetConsAddr()
-	requireNoErr(err)
-	env.setupDefaultValidatorSigningInfo(valAddrFancy)
-}
-
-func (env *TestEnv) setupDefaultValidatorSigningInfo(consAddr sdk.ConsAddress) {
-	signingInfo := slashingtypes.NewValidatorSigningInfo(
-		consAddr,
-		env.Ctx.BlockHeight(),
-		0,
-		time.Unix(0, 0),
-		false,
-		0,
-	)
-	env.App.Keepers.SlashingKeeper.SetValidatorSigningInfo(env.Ctx, consAddr, signingInfo)
+	return resp
 }
 
 func (env *TestEnv) SetupParamTypes() {
