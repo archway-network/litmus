@@ -284,7 +284,7 @@ func (env *TestEnv) Execute(tx []byte) {
 func (env *TestEnv) EndBlock() *abci.ResponseFinalizeBlock {
 	// Prepare the proposal
 	prepReq := abci.RequestPrepareProposal{
-		MaxTxBytes: int64(1048576),
+		MaxTxBytes: int64(10048576),
 		Txs:        env.BlockState.txs,
 		Time:       env.BlockState.time,
 		Height:     env.BlockState.height,

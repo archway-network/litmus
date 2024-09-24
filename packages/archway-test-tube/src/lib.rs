@@ -267,11 +267,12 @@ impl ArchwayApp {
                     fee.granter = Some(AccountId::from_str(granter).unwrap())
                 }
 
-                let tx = self.create_signed_tx(msgs.clone(), signer, fee)?.into();
+                let tx = self.create_signed_tx(msgs.clone(), signer, fee)?;
 
-                let mut buf = Vec::new();
-                RequestDeliverTx::encode(&RequestDeliverTx { tx }, &mut buf)
-                    .map_err(EncodeError::ProtoEncodeError)?;
+                let buf = tx;
+                // let mut buf = Vec::new();
+                // RequestDeliverTx::encode(&RequestDeliverTx { tx }, &mut buf)
+                //     .map_err(EncodeError::ProtoEncodeError)?;
 
                 let base64_req = BASE64_STANDARD.encode(buf);
                 redefine_as_go_string!(base64_req);
@@ -469,7 +470,7 @@ mod tests {
     // use cosmwasm_std::Uint128;
     use cosmwasm_std::{coins, Coin};
     // use cw1_whitelist::msg::{ExecuteMsg, InstantiateMsg};
-    use archway_proto::cosmos::bank::v1beta1::QueryAllBalancesRequest;
+    use archway_proto::cosmos::bank::v1beta1::{MsgSend, QueryAllBalancesRequest};
     use serde::Serialize;
 
     // use crate::aarch;
@@ -555,6 +556,14 @@ mod tests {
         let app = ArchwayApp::default();
         let admin = app.init_account(&vec![arch(100)]).unwrap();
 
+        let bank = Bank::new(&app);
+        dbg!(bank
+            .query_all_balances(&QueryAllBalancesRequest {
+                address: admin.address(),
+                pagination: None,
+            })
+            .unwrap());
+
         let wasm = Wasm::new(&app);
         let wasm_byte_code = std::fs::read("./test_artifacts/low_gas_demo.wasm").unwrap();
         let code_id = wasm
@@ -607,6 +616,23 @@ mod tests {
         assert!(accounts.get(1).is_some());
         assert!(accounts.get(2).is_some());
         assert!(accounts.get(3).is_none());
+
+        let bank = Bank::new(&app);
+        bank.send(
+            MsgSend {
+                from_address: accounts.get(0).unwrap().address(),
+                to_address: accounts.get(1).unwrap().address(),
+                amount: vec![],
+            },
+            accounts.get(0).unwrap(),
+        )
+        .unwrap();
+        dbg!(bank
+            .query_all_balances(&QueryAllBalancesRequest {
+                address: accounts.get(0).unwrap().address(),
+                pagination: None,
+            })
+            .unwrap());
     }
 
     #[test]

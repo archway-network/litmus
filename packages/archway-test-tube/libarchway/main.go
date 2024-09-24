@@ -71,10 +71,7 @@ func InitTestEnv() uint64 {
 	wasmtypes.MaxWasmSize = 1024 * 1024 * 1024 * 1024 * 1024
 
 	env.BeginNewBlock(false, 5)
-	//env.FundValidators()
 
-	//reqEndBlock := abci.RequestEndBlock{Height: env.Ctx.BlockHeight()}
-	//env.App.EndBlock(reqEndBlock)
 	env.EndBlock()
 
 	envRegister.Store(id, *env)
@@ -118,10 +115,18 @@ func InitAccount(envId uint64, coinsJson string) *C.char {
 
 			env.App.Keepers.BankKeeper.SetDenomMetaData(env.Ctx, denomMetaData)
 		}
-
 	}
 
-	err := banktestutil.FundAccount(env.Ctx, env.App.Keepers.BankKeeper, accAddr, coins)
+	// Account needs to be stored in the account keeper for other modules to be able to access it
+	acc := env.App.Keepers.AccountKeeper.NewAccountWithAddress(env.Ctx, accAddr)
+	err := acc.SetSequence(0)
+	if err != nil {
+		panic(errors.Wrapf(err, "Failed to set sequence"))
+	}
+
+	env.App.Keepers.AccountKeeper.SetAccount(env.Ctx, acc)
+
+	err = banktestutil.FundAccount(env.Ctx, env.App.Keepers.BankKeeper, accAddr, coins)
 	if err != nil {
 		panic(errors.Wrapf(err, "Failed to fund account"))
 	}
