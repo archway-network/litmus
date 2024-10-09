@@ -1,4 +1,9 @@
 [workspace]
 members = ["packages/*"]
-
 resolver = "2"
+
+[workspace.dependencies]
+test-tube = { version = "0.7.0" }
+
+[patch.crates-io]
+test-tube = { git = "https://github.com/archway-network/test-tube.git", branch = "fix/authz-result" }

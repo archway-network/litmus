@@ -10,7 +10,7 @@ default = []
 wasm-sudo = ["test-tube/wasm-sudo"]
 
 [dependencies]
-test-tube = { version = "0.7.0" }
+test-tube.workspace = true
 archway-proto = { git = "https://github.com/archway-network/arch3.rs.git", rev = "3551d45" }
 pbjson-types = "0.6.0"
 prost-types = "0.12.6"
