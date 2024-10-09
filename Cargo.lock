@@ -2721,9 +2721,8 @@ dependencies = [
 
 [[package]]
 name = "test-tube"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "804bb9bda992b6cda6f883e7973cb999d4da90d21257fb918d6a693407148681"
+version = "0.7.1"
+source = "git+https://github.com/archway-network/test-tube.git?branch=fix/authz-result#6f5eec51800e964b8e00be83594b12f3c0a8cc3e"
 dependencies = [
  "base64",
  "cosmrs",
