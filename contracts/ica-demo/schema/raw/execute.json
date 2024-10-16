@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ExecuteMsg",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": [
+        "create_i_c_a"
+      ],
+      "properties": {
+        "create_i_c_a": {
+          "type": "object",
+          "required": [
+            "connection_id"
+          ],
+          "properties": {
+            "connection_id": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "execute_i_c_a"
+      ],
+      "properties": {
+        "execute_i_c_a": {
+          "type": "object",
+          "required": [
+            "connection_id",
+            "delegator",
+            "grantee",
+            "validator"
+          ],
+          "properties": {
+            "connection_id": {
+              "type": "string"
+            },
+            "delegator": {
+              "type": "string"
+            },
+            "grantee": {
+              "type": "string"
+            },
+            "validator": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  ]
+}
