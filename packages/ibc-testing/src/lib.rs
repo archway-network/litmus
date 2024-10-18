@@ -13,6 +13,7 @@ mod tests {
     use archway_rpc::proto::ibc::applications::interchain_accounts::v1::InterchainAccount;
     use archway_rpc::proto::prost::{Message, Name};
     use archway_rpc::{Auth, Authz, Bank, Staking, Timestamp, Wasm};
+    use cosmwasm_std::Uint128;
     use ica_demo::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
     use std::time::Duration;
     use tokio::time::sleep;
@@ -42,6 +43,10 @@ mod tests {
 
         sleep(Duration::from_secs(120)).await;
 
+        // Create user wallet
+        let mut user = runtime.chain2.new_account(10000).await.unwrap();
+
+        // Create the ICA Account
         let res = runtime
             .chain1
             .client
@@ -49,6 +54,8 @@ mod tests {
                 &deployer,
                 addr.clone(),
                 &ExecuteMsg::CreateICA {
+                    chain_name: "archway-2".to_string(),
+                    delegator_address: user.prefixed_pubkey().unwrap().to_string(),
                     connection_id: "connection-0".to_string(),
                 },
                 vec![],
@@ -84,10 +91,7 @@ mod tests {
         }
         let ica = ica.unwrap();
 
-        // Create user wallet
-        let mut user = runtime.chain2.new_account(10000).await.unwrap();
-
-        // TODO: give auth perms and fund with gas money
+        // Add delegate auth
         runtime
             .chain2
             .client
@@ -105,6 +109,7 @@ mod tests {
             .await
             .unwrap();
 
+        // Get balance before staking
         let balance = runtime
             .chain2
             .client
@@ -130,18 +135,18 @@ mod tests {
             .validators;
         let validator_addr = res.first().unwrap().operator_address.to_string();
 
-        // TODO: make auth command through smart contract
+        // Stake to validator
         let res = runtime
             .chain1
             .client
             .execute_contract(
                 &deployer,
                 addr.clone(),
-                &ExecuteMsg::ExecuteICA {
+                &ExecuteMsg::InitDelegation {
                     connection_id: "connection-0".to_string(),
-                    grantee: ica,
-                    delegator: user.prefixed_pubkey().unwrap().to_string(),
+                    chain_name: "archway-2".to_string(),
                     validator: validator_addr,
+                    amount: Uint128::new(100),
                 },
                 vec![],
             )
@@ -151,6 +156,8 @@ mod tests {
             .unwrap();
 
         sleep(Duration::from_secs(60)).await;
+
+        // Get new balance
         let new_balance = runtime
             .chain2
             .client
@@ -167,6 +174,7 @@ mod tests {
         println!("{balance} {new_balance}");
         assert_ne!(balance, new_balance);
 
+        // Query TX history
         let res = runtime
             .chain1
             .client
@@ -179,7 +187,7 @@ mod tests {
             .await
             .unwrap();
 
-        dbg!(&res);
+        // dbg!(&res);
 
         runtime.stop().await;
     }

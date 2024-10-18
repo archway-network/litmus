@@ -1,15 +1,16 @@
-use crate::msg::{IcaMsg, SudoMsg};
-use crate::state::ICA_HISTORY;
+use crate::msg::SudoMsg;
+use crate::state::{IcaAccount, ICA_ACCOUNTS, ICA_HISTORY, PENDING_ACCOUNT};
 use crate::ContractError;
 use archway_proto::any::Any;
 use archway_proto::archway::cwerrors::v1::SudoError;
-use archway_proto::archway::cwica::v1::{MsgRegisterInterchainAccount, MsgSendTx};
+use archway_proto::archway::cwica::v1::{IcaSuccess, MsgRegisterInterchainAccount, MsgSendTx};
 use archway_proto::cosmos::authz::v1beta1::MsgExec;
 use archway_proto::cosmos::base::v1beta1::Coin;
 use archway_proto::cosmos::staking::v1beta1::MsgDelegate;
 use archway_proto::prost::{Message, Name};
 use cosmwasm_std::{
     entry_point, to_json_binary, Attribute, Binary, CosmosMsg, DepsMut, Env, Response, SubMsg,
+    Uint128,
 };
 // TODO: create a system based on handshakes
 
@@ -45,6 +46,7 @@ pub fn execute_stake(
     grantee: String,
     delegator: String,
     validator: String,
+    amount: Uint128,
     response: &mut Response,
 ) -> Result<(), ContractError> {
     let execute_msg = MsgSendTx {
@@ -57,7 +59,7 @@ pub fn execute_stake(
                 validator_address: validator,
                 amount: Some(Coin {
                     denom: "stake".to_string(),
-                    amount: "100".to_string(),
+                    amount: amount.to_string(),
                 }),
             })],
         })],
@@ -76,24 +78,29 @@ pub fn execute_stake(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractError> {
     match msg {
-        SudoMsg::Ica {
-            account_registered,
-            tx_executed,
-        } => sudo_ica(
-            deps,
-            env,
-            IcaMsg {
-                account_registered,
-                tx_executed,
-            },
-        ),
+        SudoMsg::Ica(msg) => sudo_ica(deps, env, msg),
         SudoMsg::Error(msg) => sudo_error(deps, env, msg),
     }?;
     Ok(Response::new())
 }
 
-pub fn sudo_ica(deps: DepsMut, env: Env, msg: IcaMsg) -> Result<Response, ContractError> {
+pub fn sudo_ica(deps: DepsMut, env: Env, msg: IcaSuccess) -> Result<Response, ContractError> {
     let response = Response::new();
+
+    if let Some(ica) = msg.account_registered.as_ref() {
+        if let Some((chain_name, delegator)) = PENDING_ACCOUNT.may_load(deps.storage)? {
+            ICA_ACCOUNTS.save(
+                deps.storage,
+                chain_name,
+                &IcaAccount {
+                    ica_host_address: ica.counterparty_address.clone(),
+                    delegator_address: delegator,
+                },
+            )?;
+        } else {
+            return Err(ContractError::NoPendingIca {});
+        }
+    }
 
     ICA_HISTORY.update::<_, ContractError>(deps.storage, |mut history| {
         history.push(msg);

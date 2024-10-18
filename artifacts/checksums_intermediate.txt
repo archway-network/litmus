@@ -1,2 +1,2 @@
-1231de5e7d029b40017a8f21e1b66449307cfa0f17978bf49d7aa8f603726860  /target/wasm32-unknown-unknown/release/demo_contract.wasm
-6d022a64a7cd5180fc00aadc2d6bc5ef75acf34638245de41acc32a7951ddbb5  /target/wasm32-unknown-unknown/release/ica_demo.wasm
+1231de5e7d029b40017a8f21e1b66449307cfa0f17978bf49d7aa8f603726860  target/wasm32-unknown-unknown/release/demo_contract.wasm
+5388f188d031923a0f6a63f46c1ddd811c106aa55e6f22ee3fa38bf06c0ad87c  target/wasm32-unknown-unknown/release/ica_demo.wasm

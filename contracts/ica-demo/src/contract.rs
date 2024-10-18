@@ -5,7 +5,7 @@ use cosmwasm_std::{to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Resp
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::ICA_HISTORY;
+use crate::state::{ICA_ACCOUNTS, ICA_HISTORY, PENDING_ACCOUNT};
 use crate::sudo::{execute_stake, register};
 /*
 // version info for migration info
@@ -32,8 +32,19 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::CreateICA { connection_id } => {
+        ExecuteMsg::CreateICA {
+            chain_name,
+            delegator_address,
+            connection_id,
+        } => {
             let mut response = Response::new();
+
+            if PENDING_ACCOUNT.exists(deps.storage) {
+                return Err(ContractError::PendingIca {});
+            }
+
+            PENDING_ACCOUNT.save(deps.storage, &(chain_name, delegator_address))?;
+
             register(
                 env.contract.address.to_string(),
                 connection_id,
@@ -41,20 +52,23 @@ pub fn execute(
             )?;
             Ok(response)
         }
-        ExecuteMsg::ExecuteICA {
+        ExecuteMsg::InitDelegation {
             connection_id,
-            grantee,
-            delegator,
+            chain_name,
             validator,
+            amount,
         } => {
             let mut response = Response::new();
+
+            let ica = ICA_ACCOUNTS.load(deps.storage, chain_name)?;
 
             execute_stake(
                 &env,
                 connection_id,
-                grantee,
-                delegator,
+                ica.ica_host_address,
+                ica.delegator_address,
                 validator,
+                amount,
                 &mut response,
             )?;
 

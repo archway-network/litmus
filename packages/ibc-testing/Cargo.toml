@@ -12,3 +12,4 @@ tokio = "1.40.0"
 #archway-proto = { path = "../../../arch3.rs/packages/proto", default-features = false, features = ["cosmwasm", "abstract-any"] }
 tokio = { version = "1.40.0", features = ["full", "test-util"] }
 ica-demo = { path = "../../contracts/ica-demo", features = ["library"] }
+cosmwasm-std = { version = "1.3.1" }
