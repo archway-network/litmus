@@ -21,6 +21,7 @@ require (
 )
 
 require (
+	cosmossdk.io/core v0.11.0
 	cosmossdk.io/log v1.3.1
 	github.com/cosmos/cosmos-db v1.0.2
 )
@@ -33,7 +34,6 @@ require (
 	cloud.google.com/go/storage v1.36.0 // indirect
 	cosmossdk.io/client/v2 v2.0.0-beta.1 // indirect
 	cosmossdk.io/collections v0.4.0 // indirect
-	cosmossdk.io/core v0.11.0 // indirect
 	cosmossdk.io/depinject v1.0.0-alpha.4 // indirect
 	cosmossdk.io/store v1.1.0 // indirect
 	cosmossdk.io/x/evidence v0.1.1 // indirect

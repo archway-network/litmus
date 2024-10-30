@@ -7,8 +7,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	banktestutil "github.com/cosmos/cosmos-sdk/x/bank/testutil"
 	"os"
 	"sync"
+	"time"
 
 	// helpers
 	proto "github.com/cosmos/gogoproto/proto"
@@ -18,12 +20,11 @@ import (
 	abci "github.com/cometbft/cometbft/abci/types"
 
 	// cosmos sdk
+	coreheader "cosmossdk.io/core/header"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	banktestutil "github.com/cosmos/cosmos-sdk/x/bank/testutil"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
-
 	// wasmd
 	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
 
@@ -70,9 +71,14 @@ func InitTestEnv() uint64 {
 	// Allow testing unoptimized contract
 	wasmtypes.MaxWasmSize = 1024 * 1024 * 1024 * 1024 * 1024
 
-	env.BeginNewBlock(false, 5)
-
-	env.EndBlock()
+	env.FundValidators()
+	//env.BeginNewBlock(false, 5)
+	//
+	//env.EndBlock()
+	err = emptyBlock(env)
+	if err != nil {
+		panic(err)
+	}
 
 	envRegister.Store(id, *env)
 
@@ -89,9 +95,16 @@ func CleanUp(envId uint64) {
 	envRegister.Delete(envId)
 }
 
+func VerifyAccountExists(env *testenv.TestEnv, accAddr sdk.AccAddress) bool {
+	// Check if account exists in AccountKeeper
+	acc := env.App.Keepers.AccountKeeper.GetAccount(env.Ctx, accAddr)
+	return acc != nil
+}
+
 //export InitAccount
 func InitAccount(envId uint64, coinsJson string) *C.char {
 	env := loadEnv(envId)
+
 	var coins sdk.Coins
 
 	if err := json.Unmarshal([]byte(coinsJson), &coins); err != nil {
@@ -117,52 +130,133 @@ func InitAccount(envId uint64, coinsJson string) *C.char {
 		}
 	}
 
-	// Account needs to be stored in the account keeper for other modules to be able to access it
-	acc := env.App.Keepers.AccountKeeper.NewAccountWithAddress(env.Ctx, accAddr)
-	err := acc.SetSequence(0)
-	if err != nil {
-		panic(errors.Wrapf(err, "Failed to set sequence"))
-	}
-
-	env.App.Keepers.AccountKeeper.SetAccount(env.Ctx, acc)
-
-	err = banktestutil.FundAccount(env.Ctx, env.App.Keepers.BankKeeper, accAddr, coins)
+	err := banktestutil.FundAccount(env.Ctx, env.App.Keepers.BankKeeper, accAddr, coins)
 	if err != nil {
 		panic(errors.Wrapf(err, "Failed to fund account"))
 	}
 
-	base64Priv := base64.StdEncoding.EncodeToString(priv.Bytes())
+	err = emptyBlock(&env)
+	if err != nil {
+		panic(err)
+	}
 
 	envRegister.Store(envId, env)
 
-	return C.CString(base64Priv)
+	return C.CString(base64.StdEncoding.EncodeToString(priv.Bytes()))
 }
 
 //export IncreaseTime
-func IncreaseTime(envId uint64, seconds uint64) {
+func IncreaseTime(envId uint64, seconds uint64) int64 {
 	env := loadEnv(envId)
-	env.BeginNewBlock(false, seconds)
+	_, err := finalizeBlock(&env, [][]byte{}, seconds)
+	if err != nil {
+		panic(err)
+	}
+	_, err = commitWithCustomIncBlockTime(&env)
+	if err != nil {
+		panic(err)
+	}
 	envRegister.Store(envId, env)
-	EndBlock(envId)
+
+	return env.Ctx.BlockTime().UnixNano()
 }
 
-//export BeginBlock
-func BeginBlock(envId uint64) {
+//export SkipBlock
+func SkipBlock(envId uint64) {
 	env := loadEnv(envId)
-	env.BeginNewBlock(false, 5)
+	err := emptyBlock(&env)
+	if err != nil {
+		panic(err)
+	}
 	envRegister.Store(envId, env)
 }
 
-//export EndBlock
-func EndBlock(envId uint64) *C.char {
+func emptyBlock(env *testenv.TestEnv) error {
+	_, err := finalizeBlock(env, [][]byte{}, 5)
+	if err != nil {
+		return err
+	}
+	_, err = commitWithCustomIncBlockTime(env)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+//export FinalizeBlock
+func FinalizeBlock(envId uint64, tx string) *C.char {
 	env := loadEnv(envId)
-	res := env.EndBlock()
+
+	txBytes, err := base64.StdEncoding.DecodeString(tx)
+	if err != nil {
+		return encodeErrToResultBytes(result.ExecuteError, err)
+	}
+
+	res, err := finalizeBlock(&env, [][]byte{txBytes}, 5)
+
+	if err != nil {
+		return encodeErrToResultBytes(result.ExecuteError, err)
+	}
 
 	envRegister.Store(envId, env)
 
-	p, _ := proto.Marshal(res)
+	bz, err := proto.Marshal(res)
+	if err != nil {
+		return encodeErrToResultBytes(result.ExecuteError, err)
+	}
 
-	return encodeBytesResultBytes(p)
+	return encodeBytesResultBytes(bz)
+}
+
+func finalizeBlock(env *testenv.TestEnv, txs [][]byte, seconds uint64) (*abci.ResponseFinalizeBlock, error) {
+	// Setup the new block time with the time increment
+	newBlockTime := env.Ctx.BlockTime().Add(time.Duration(seconds) * time.Second)
+
+	// Prepare block info
+	header := env.Ctx.BlockHeader()
+	header.Time = newBlockTime
+	header.Height++
+
+	env.Ctx = env.App.BaseApp.NewUncachedContext(false, header).WithHeaderInfo(coreheader.Info{
+		Height: header.Height,
+		Time:   header.Time,
+	})
+
+	// Finalize the block
+	res, err := env.App.FinalizeBlock(&abci.RequestFinalizeBlock{
+		Txs:    txs,
+		Height: env.Ctx.BlockHeight(),
+		Time:   env.Ctx.BlockTime(),
+	})
+
+	return res, err
+}
+
+//export Commit
+func Commit(envId uint64) *C.char {
+	env := loadEnv(envId)
+	res, err := commitWithCustomIncBlockTime(&env)
+	if err != nil {
+		return encodeErrToResultBytes(result.ExecuteError, err)
+	}
+
+	envRegister.Store(envId, env)
+
+	bz, err := proto.Marshal(res)
+	if err != nil {
+		return encodeErrToResultBytes(result.ExecuteError, err)
+	}
+
+	return encodeBytesResultBytes(bz)
+}
+
+func commitWithCustomIncBlockTime(env *testenv.TestEnv) (*abci.ResponseCommit, error) {
+	res, err := env.App.Commit()
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
 
 //export WasmSudo
@@ -187,23 +281,6 @@ func WasmSudo(envId uint64, bech32Address, msgJson string) *C.char {
 	envRegister.Store(envId, env)
 
 	return encodeBytesResultBytes(res)
-}
-
-//export Execute
-func Execute(envId uint64, base64Tx string) {
-	env := loadEnv(envId)
-	// Temp fix for concurrency issue
-	mu.Lock()
-	defer mu.Unlock()
-
-	TxBytes, err := base64.StdEncoding.DecodeString(base64Tx)
-	if err != nil {
-		panic(err)
-	}
-
-	env.Execute(TxBytes)
-
-	envRegister.Store(envId, env)
 }
 
 //export Query
@@ -288,8 +365,7 @@ func Simulate(envId uint64, base64TxBytes string) *C.char { // => base64GasInfo
 		panic(err)
 	}
 
-	gasInfo, _, err := env.App.Simulate(txBytes)
-
+	gasInfo, _, err := env.App.BaseApp.Simulate(txBytes)
 	if err != nil {
 		return encodeErrToResultBytes(result.ExecuteError, err)
 	}

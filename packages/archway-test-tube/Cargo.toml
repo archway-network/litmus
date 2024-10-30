@@ -10,15 +10,16 @@ default = []
 wasm-sudo = ["test-tube/wasm-sudo"]
 
 [dependencies]
-test-tube = { version = "0.7.0" }
-archway-proto = { git = "https://github.com/archway-network/arch3.rs.git", rev = "3551d45" }
-pbjson-types = "0.6.0"
-prost-types = "0.12.6"
-cosmwasm-std = "1.5.5"
-prost = "0.12.3"
+#test-tube = { version = "0.8.0" }
+test-tube = { git = "https://github.com/osmosis-labs/test-tube.git", rev = "9688c23" }
+archway-proto = { git = "https://github.com/archway-network/arch3.rs.git", branch = "feature/dependency-bump" }
+pbjson-types = "0.7.0"
+prost-types = "0.13.3"
+cosmwasm-std = { version = "2.1", features = ["stargate"] }
+prost = "0.13.3"
 serde = "1.0"
 serde_json = "1.0"
-base64 = "0.21.5"
+base64 = "0.22.1"
 
 [dev-dependencies]
 cw1-whitelist = "1.1.2"

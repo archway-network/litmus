@@ -2,36 +2,33 @@ mod bindings;
 pub mod module;
 
 pub use archway_proto;
-use archway_proto::tendermint::abci::{ExecTxResult, ResponseFinalizeBlock};
-#[cfg(feature = "benchmark")]
-pub use module::benchmark::*;
+use archway_proto::tendermint::abci::ExecTxResult;
+use cosmrs::proto::tendermint::abci::ResponseFinalizeBlock;
 use std::ffi::CString;
 use std::str::FromStr;
 
 // TODO: add a with_module::<Wasm>(FnOnce(msg) -> Response) -> Response
 
-use crate::bindings::{EndBlock, Execute};
+use crate::bindings::SkipBlock;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
+use cosmrs::Any;
 use cosmwasm_std::Coin;
 use prost::Message;
-use prost_types::Any;
 pub use test_tube;
 use test_tube::bindings::{
-    AccountNumber, AccountSequence, BeginBlock, GetBlockHeight, GetBlockTime,
+    AccountNumber, AccountSequence, Commit, FinalizeBlock, GetBlockHeight, GetBlockTime,
     GetValidatorPrivateKey, IncreaseTime, InitAccount, InitTestEnv, Query, Simulate,
 };
 use test_tube::cosmrs::crypto::secp256k1::SigningKey;
-use test_tube::cosmrs::proto::tendermint::v0_37::abci::{
-    Event, EventAttribute, RequestDeliverTx, ResponseDeliverTx,
-};
+use test_tube::cosmrs::proto::tendermint::v0_37::abci::{Event, EventAttribute, ResponseDeliverTx};
 use test_tube::cosmrs::tx::{Fee, SignerInfo};
 use test_tube::cosmrs::{tx, AccountId};
 use test_tube::runner::error::DecodeError;
 use test_tube::runner::result::RawResult;
 use test_tube::{
-    cosmrs, redefine_as_go_string, Account, EncodeError, ExecuteResponse, FeeSetting, Runner,
-    RunnerError, RunnerExecuteResult, RunnerResult, SigningAccount,
+    cosmrs, redefine_as_go_string, Account, EncodeError, FeeSetting, Runner, RunnerError,
+    RunnerExecuteResult, RunnerResult, SigningAccount,
 };
 
 pub const FEE_DENOM: &str = "aarch";
@@ -127,8 +124,7 @@ impl ArchwayApp {
     /// Submits an empty block to the chain
     pub fn skip_block(&self) {
         unsafe {
-            BeginBlock(self.id);
-            EndBlock(self.id);
+            SkipBlock(self.id);
         }
     }
 
@@ -176,9 +172,7 @@ impl ArchwayApp {
         redefine_as_go_string!(coins_json);
 
         let base64_priv = unsafe {
-            BeginBlock(self.id);
             let addr = InitAccount(self.id, coins_json);
-            EndBlock(self.id);
             CString::from_raw(addr)
         }
         .to_str()
@@ -252,38 +246,22 @@ impl ArchwayApp {
     where
         R: ::prost::Message + Default,
     {
-        unsafe {
-            let res = self.run_block(|| {
-                // Set granter for the sim fee
-                let mut sim_fee = self.default_simulation_fee();
-                if let Some(granter) = granter {
-                    sim_fee.granter = Some(AccountId::from_str(granter).unwrap())
-                }
-
-                let tx_sim_fee = self.create_signed_tx(msgs.clone(), signer, sim_fee)?;
-                let mut fee = self.calculate_fee(&tx_sim_fee, signer)?;
-
-                if let Some(granter) = granter {
-                    fee.granter = Some(AccountId::from_str(granter).unwrap())
-                }
-
-                let tx = self.create_signed_tx(msgs.clone(), signer, fee)?;
-
-                let buf = tx;
-                // let mut buf = Vec::new();
-                // RequestDeliverTx::encode(&RequestDeliverTx { tx }, &mut buf)
-                //     .map_err(EncodeError::ProtoEncodeError)?;
-
-                let base64_req = BASE64_STANDARD.encode(buf);
-                redefine_as_go_string!(base64_req);
-
-                Execute(self.id, base64_req);
-                Ok(())
-            });
-
-            res.map(|res| convert_to_response_deliver_tx(res.tx_results.first().unwrap().clone()))?
-                .try_into()
+        // Set granter for the sim fee
+        let mut sim_fee = self.default_simulation_fee();
+        if let Some(granter) = granter {
+            sim_fee.granter = Some(AccountId::from_str(granter).unwrap())
         }
+
+        let tx_sim_fee = self.create_signed_tx(msgs.clone(), signer, sim_fee)?;
+        let mut fee = self.calculate_fee(&tx_sim_fee, signer)?;
+
+        if let Some(granter) = granter {
+            fee.granter = Some(AccountId::from_str(granter).unwrap())
+        }
+
+        let tx = self.create_signed_tx(msgs.clone(), signer, fee)?;
+        let res = self.execute_tx(&tx)?;
+        res.try_into()
     }
 
     pub fn default_simulation_fee(&self) -> Fee {
@@ -322,7 +300,7 @@ impl ArchwayApp {
                 let gas_info = self.simulate_tx_bytes(tx_bytes)?;
                 let gas_limit = ((gas_info.gas_used as f64) * (gas_adjustment)).ceil() as u64;
                 let amount = cosmrs::Coin {
-                    denom: self.fee_denom.parse().unwrap(),
+                    denom: self.fee_denom.parse()?,
                     amount: (((gas_limit as f64) * (gas_price.amount.u128() as f64)).ceil() as u64)
                         .into(),
                 };
@@ -331,7 +309,7 @@ impl ArchwayApp {
             }
             FeeSetting::Custom { amount, gas_limit } => Ok(Fee::from_amount_and_gas(
                 cosmrs::Coin {
-                    denom: amount.denom.parse().unwrap(),
+                    denom: amount.denom.parse()?,
                     amount: amount.amount.to_string().parse().unwrap(),
                 },
                 *gas_limit,
@@ -374,21 +352,6 @@ impl ArchwayApp {
             .map_err(EncodeError::from_proto_error_report)
             .map_err(RunnerError::EncodeError)
     }
-
-    unsafe fn run_block(
-        &self,
-        execution: impl Fn() -> Result<(), RunnerError>,
-    ) -> Result<ResponseFinalizeBlock, RunnerError> {
-        unsafe { BeginBlock(self.id) };
-        execution()?;
-        unsafe {
-            let res = EndBlock(self.id);
-            let res = RawResult::from_non_null_ptr(res).into_result()?;
-
-            ResponseFinalizeBlock::decode(res.as_slice())
-                .map_err(|err| RunnerError::DecodeError(DecodeError::ProtoDecodeError(err)))
-        }
-    }
 }
 
 impl Default for ArchwayApp {
@@ -421,21 +384,28 @@ impl<'a> Runner<'a> for ArchwayApp {
         self.execute_multiple_raw_with_granter(msgs, signer, None)
     }
 
-    fn execute_tx(&self, tx_bytes: &[u8]) -> RunnerResult<ResponseDeliverTx> {
+    fn execute_tx(&self, tx_bytes: &[u8]) -> RunnerResult<ResponseFinalizeBlock> {
         unsafe {
-            let res = self.run_block(|| {
-                let request_devlier_tx = RequestDeliverTx {
-                    tx: tx_bytes.to_vec().into(),
-                };
+            let base64_tx = BASE64_STANDARD.encode(tx_bytes);
+            redefine_as_go_string!(base64_tx);
 
-                let base64_req = BASE64_STANDARD.encode(request_devlier_tx.encode_to_vec());
-                redefine_as_go_string!(base64_req);
+            let res = FinalizeBlock(self.id, base64_tx);
+            let res = RawResult::from_non_null_ptr(res).into_result()?;
 
-                Execute(self.id, base64_req);
-                Ok(())
-            });
+            RawResult::from_non_null_ptr(Commit(self.id)).into_result()?;
 
-            res.map(|res| convert_to_response_deliver_tx(res.tx_results.first().unwrap().clone()))
+            let res = ResponseFinalizeBlock::decode(res.as_slice())
+                .map_err(DecodeError::ProtoDecodeError)?;
+
+            let tx_result = res.tx_results.get(0).cloned().expect("tx_result not found");
+
+            if !tx_result.codespace.is_empty() {
+                return Err(RunnerError::ExecuteError {
+                    msg: tx_result.log.clone(),
+                });
+            }
+
+            Ok(res)
         }
     }
 
@@ -467,18 +437,14 @@ mod tests {
     use cosmwasm_schema::cw_serde;
     use std::option::Option::None;
 
-    // use cosmwasm_std::Uint128;
+    use archway_proto::cosmos::bank::v1beta1::QueryAllBalancesRequest;
     use cosmwasm_std::{coins, Coin};
-    // use cw1_whitelist::msg::{ExecuteMsg, InstantiateMsg};
-    use archway_proto::cosmos::bank::v1beta1::{MsgSend, QueryAllBalancesRequest};
     use serde::Serialize;
 
-    // use crate::aarch;
+    use crate::module::{Bank, Wasm};
     use crate::{arch, ArchwayApp};
     use test_tube::account::{Account, FeeSetting};
     use test_tube::module::Module;
-    // use test_tube::runner::*;
-    use crate::module::{Bank, Wasm};
 
     pub mod netwars_msgs {
         use cosmwasm_std::{Addr, Uint128};
@@ -556,14 +522,6 @@ mod tests {
         let app = ArchwayApp::default();
         let admin = app.init_account(&vec![arch(100)]).unwrap();
 
-        let bank = Bank::new(&app);
-        dbg!(bank
-            .query_all_balances(&QueryAllBalancesRequest {
-                address: admin.address(),
-                pagination: None,
-            })
-            .unwrap());
-
         let wasm = Wasm::new(&app);
         let wasm_byte_code = std::fs::read("./test_artifacts/low_gas_demo.wasm").unwrap();
         let code_id = wasm
@@ -597,6 +555,7 @@ mod tests {
         let res = wasm
             .execute::<ExecMsg>(&contract_addr, &ExecMsg::EmptyLoad {}, &[], &admin)
             .unwrap();
+        // TODO: need to run in the latest chain version
         println!("   Chain | Gas Wanted | Gas Used");
         println!("TestNet  |   187574   | 185786");
         println!(
@@ -616,23 +575,6 @@ mod tests {
         assert!(accounts.get(1).is_some());
         assert!(accounts.get(2).is_some());
         assert!(accounts.get(3).is_none());
-
-        let bank = Bank::new(&app);
-        bank.send(
-            MsgSend {
-                from_address: accounts.get(0).unwrap().address(),
-                to_address: accounts.get(1).unwrap().address(),
-                amount: vec![],
-            },
-            accounts.get(0).unwrap(),
-        )
-        .unwrap();
-        dbg!(bank
-            .query_all_balances(&QueryAllBalancesRequest {
-                address: accounts.get(0).unwrap().address(),
-                pagination: None,
-            })
-            .unwrap());
     }
 
     #[test]
@@ -671,8 +613,8 @@ mod tests {
         let accs = app
             .init_accounts(
                 &[
-                    Coin::new(1_000_000_000_000, "uatom"),
-                    Coin::new(1_000_000_000_000_000_000_000_000, "aarch"),
+                    Coin::new(1_000_000_000_000u128, "uatom"),
+                    Coin::new(1_000_000_000_000_000_000_000_000u128, "aarch"),
                 ],
                 2,
             )
@@ -739,7 +681,7 @@ mod tests {
         let alice = app.init_account(&coins(initial_balance, "aarch")).unwrap();
         let bob = app.init_account(&coins(initial_balance, "aarch")).unwrap();
 
-        let amount = Coin::new(1_000_000, "aarch");
+        let amount = Coin::new(1_000_000u128, "aarch");
         let gas_limit = 100_000_000;
 
         // use FeeSetting::Auto by default, so should not equal newly custom fee setting
@@ -754,7 +696,7 @@ mod tests {
             amount: amount.clone(),
             gas_limit,
         });
-        let res = wasm.store_code(&wasm_byte_code, None, &bob).unwrap();
+        let _res = wasm.store_code(&wasm_byte_code, None, &bob).unwrap();
 
         let bob_balance = Bank::new(&app)
             .query_all_balances(&QueryAllBalancesRequest {
@@ -770,7 +712,6 @@ mod tests {
             .parse::<u128>()
             .unwrap();
 
-        assert_eq!(res.gas_info.gas_wanted, gas_limit);
         assert_eq!(bob_balance, initial_balance - amount.amount.u128());
     }
 

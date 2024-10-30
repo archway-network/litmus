@@ -60,8 +60,6 @@ func GenesisStateWithValSet(appInstance *app.ArchwayApp) (app.GenesisState, secp
 
 	//////////////////////
 	balances := []banktypes.Balance{}
-
-	// TODO: check if works
 	genesisState := app.NewDefaultGenesisState(app.MakeEncodingConfig().Marshaler)
 	genAccs := []authtypes.GenesisAccount{acc}
 	authGenesis := authtypes.NewGenesisState(authtypes.DefaultParams(), genAccs)
@@ -141,16 +139,9 @@ func GenesisStateWithValSet(appInstance *app.ArchwayApp) (app.GenesisState, secp
 type TestEnv struct {
 	App                *app.ArchwayApp
 	Ctx                sdk.Context
-	BlockState         *BlockState
 	ParamTypesRegistry ParamTypeRegistry
 	ValPrivs           []*secp256k1.PrivKey
 	NodeHome           string
-}
-
-type BlockState struct {
-	txs    [][]byte
-	height int64
-	time   time.Time
 }
 
 // DebugAppOptions is a stub implementing AppOptions
@@ -160,6 +151,10 @@ type DebugAppOptions struct{}
 func (ao DebugAppOptions) Get(o string) interface{} {
 	if o == server.FlagTrace {
 		return true
+	}
+
+	if o == "wasm.simulation_gas_limit" {
+		return ^uint64(0) // max uint64
 	}
 	return nil
 }
@@ -207,6 +202,7 @@ func InitChain(appInstance *app.ArchwayApp) (sdk.Context, secp256k1.PrivKey) {
 	requireNoErr(err)
 
 	concensusParams := simtestutil.DefaultConsensusParams
+	// TODO: max gas could be set to 300mil
 	concensusParams.Block = &cmtproto.BlockParams{
 		MaxBytes: 22020096,
 		MaxGas:   -1,
@@ -215,7 +211,7 @@ func InitChain(appInstance *app.ArchwayApp) (sdk.Context, secp256k1.PrivKey) {
 	// replace sdk.DefaultDenom with "aarch", a bit of a hack, needs improvement
 	stateBytes = []byte(strings.Replace(string(stateBytes), "\"stake\"", "\"aarch\"", -1))
 
-	appInstance.InitChain(
+	_, err = appInstance.InitChain(
 		&abci.RequestInitChain{
 			Validators:      []abci.ValidatorUpdate{},
 			ConsensusParams: concensusParams,
@@ -223,6 +219,9 @@ func InitChain(appInstance *app.ArchwayApp) (sdk.Context, secp256k1.PrivKey) {
 			ChainId:         "archway-1",
 		},
 	)
+	if err != nil {
+		panic(err)
+	}
 
 	ctx := appInstance.NewContextLegacy(false, cmtproto.Header{Height: 0, ChainID: "archway-1", Time: time.Now().UTC()})
 
@@ -238,23 +237,22 @@ func InitChain(appInstance *app.ArchwayApp) (sdk.Context, secp256k1.PrivKey) {
 			false,
 			0,
 		)
-		appInstance.Keepers.SlashingKeeper.SetValidatorSigningInfo(ctx, consAddr, signingInfo)
+		err = appInstance.Keepers.SlashingKeeper.SetValidatorSigningInfo(ctx, consAddr, signingInfo)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	return ctx, valPriv
 }
 
 func (env *TestEnv) BeginNewBlock(executeNextEpoch bool, timeIncreaseSeconds uint64) {
-	newBlockTime := env.Ctx.BlockTime().Add(time.Duration(timeIncreaseSeconds) * time.Second)
-	if executeNextEpoch {
-		newBlockTime = env.Ctx.BlockTime().Add(time.Second)
-	}
+	validators, err := env.App.Keepers.StakingKeeper.GetAllValidators(env.Ctx)
+	requireNoErr(err)
+	valAddr, err := validators[0].GetConsAddr()
+	requireNoErr(err)
 
-	env.Ctx = env.Ctx.WithBlockTime(newBlockTime).WithBlockHeight(env.Ctx.BlockHeight() + 1)
-	env.BlockState = &BlockState{
-		height: env.Ctx.BlockHeight(),
-		time:   env.Ctx.BlockTime(),
-	}
+	env.beginNewBlockWithProposer(executeNextEpoch, valAddr, timeIncreaseSeconds)
 }
 
 func (env *TestEnv) FundValidators() {
@@ -277,50 +275,30 @@ func (env *TestEnv) GetValidatorAddresses() []string {
 	return addresses
 }
 
-func (env *TestEnv) Execute(tx []byte) {
-	env.BlockState.txs = append(env.BlockState.txs, tx)
-}
-
-func (env *TestEnv) EndBlock() *abci.ResponseFinalizeBlock {
-	// Prepare the proposal
-	prepReq := abci.RequestPrepareProposal{
-		MaxTxBytes: int64(10048576),
-		Txs:        env.BlockState.txs,
-		Time:       env.BlockState.time,
-		Height:     env.BlockState.height,
-	}
-	prepResp, err := env.App.PrepareProposal(&prepReq)
+// beginNewBlockWithProposer begins a new block with a proposer.
+func (env *TestEnv) beginNewBlockWithProposer(executeNextEpoch bool, proposer sdk.ValAddress, timeIncreaseSeconds uint64) {
+	validator, err := env.App.Keepers.StakingKeeper.GetValidator(env.Ctx, proposer)
 	requireNoErr(err)
 
-	// Process the proposal
-	procReq := abci.RequestProcessProposal{
-		Txs:    prepResp.Txs,
-		Time:   env.BlockState.time,
-		Height: env.BlockState.height,
-	}
-	procResp, err := env.App.ProcessProposal(&procReq)
+	valConsAddr, err := validator.GetConsAddr()
 	requireNoErr(err)
 
-	if procResp.Status != abci.ResponseProcessProposal_ACCEPT {
-		panic("proposal rejected")
-	}
+	valAddr := valConsAddr
 
-	// Finalize the block
-	finalReq := abci.RequestFinalizeBlock{
-		Txs:    env.BlockState.txs,
-		Time:   env.BlockState.time,
-		Height: env.BlockState.height,
-	}
-	resp, err := env.App.FinalizeBlock(&finalReq)
+	newBlockTime := env.Ctx.BlockTime().Add(time.Duration(timeIncreaseSeconds) * time.Second)
+
+	header := cmtproto.Header{Height: env.Ctx.BlockHeight() + 1, Time: newBlockTime}
+	env.Ctx = env.Ctx.WithBlockTime(newBlockTime).WithBlockHeight(env.Ctx.BlockHeight() + 1)
+	voteInfos := []abci.VoteInfo{{
+		Validator:   abci.Validator{Address: valAddr, Power: 1000},
+		BlockIdFlag: cmtproto.BlockIDFlagCommit,
+	}}
+	env.Ctx = env.Ctx.WithVoteInfos(voteInfos)
+
+	_, err = env.App.BeginBlocker(env.Ctx)
 	requireNoErr(err)
 
-	_, err = env.App.Commit()
-	requireNoErr(err)
-
-	// Reset block state
-	env.BlockState = &BlockState{}
-
-	return resp
+	env.Ctx = env.App.NewContextLegacy(false, header)
 }
 
 func (env *TestEnv) SetupParamTypes() {
