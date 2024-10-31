@@ -202,10 +202,9 @@ func InitChain(appInstance *app.ArchwayApp) (sdk.Context, secp256k1.PrivKey) {
 	requireNoErr(err)
 
 	concensusParams := simtestutil.DefaultConsensusParams
-	// TODO: max gas could be set to 300mil
 	concensusParams.Block = &cmtproto.BlockParams{
 		MaxBytes: 22020096,
-		MaxGas:   -1,
+		MaxGas:   300000000,
 	}
 
 	// replace sdk.DefaultDenom with "aarch", a bit of a hack, needs improvement
