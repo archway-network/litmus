@@ -1,6 +1,7 @@
 use archway_proto::cosmos::bank::v1beta1::{
     MsgSend, MsgSendResponse, QueryAllBalancesRequest, QueryAllBalancesResponse,
-    QueryBalanceRequest, QueryBalanceResponse, QueryTotalSupplyRequest, QueryTotalSupplyResponse,
+    QueryBalanceRequest, QueryBalanceResponse, QueryDenomsMetadataRequest,
+    QueryDenomsMetadataResponse, QueryTotalSupplyRequest, QueryTotalSupplyResponse,
 };
 use test_tube::{fn_execute, fn_query, Module, Runner};
 
@@ -32,5 +33,9 @@ where
 
     fn_query! {
         pub query_total_supply ["/cosmos.bank.v1beta1.Query/TotalSupply"]: QueryTotalSupplyRequest => QueryTotalSupplyResponse
+    }
+
+    fn_query! {
+        pub query_denoms_metadata ["/cosmos.bank.v1beta1.Query/DenomsMetadata"]: QueryDenomsMetadataRequest => QueryDenomsMetadataResponse
     }
 }
