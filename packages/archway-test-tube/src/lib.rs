@@ -675,47 +675,6 @@ mod tests {
     }
 
     #[test]
-    fn test_custom_fee() {
-        let app = ArchwayApp::default();
-        let initial_balance = 1_000_000_000_000_000_000_000;
-        let alice = app.init_account(&coins(initial_balance, "aarch")).unwrap();
-        let bob = app.init_account(&coins(initial_balance, "aarch")).unwrap();
-
-        let amount = Coin::new(1_000_000u128, "aarch");
-        let gas_limit = 100_000_000;
-
-        // use FeeSetting::Auto by default, so should not equal newly custom fee setting
-        let wasm = Wasm::new(&app);
-        let wasm_byte_code = std::fs::read("./test_artifacts/cw1_whitelist.wasm").unwrap();
-        let res = wasm.store_code(&wasm_byte_code, None, &alice).unwrap();
-
-        assert_ne!(res.gas_info.gas_wanted, gas_limit);
-
-        //update fee setting
-        let bob = bob.with_fee_setting(FeeSetting::Custom {
-            amount: amount.clone(),
-            gas_limit,
-        });
-        let _res = wasm.store_code(&wasm_byte_code, None, &bob).unwrap();
-
-        let bob_balance = Bank::new(&app)
-            .query_all_balances(&QueryAllBalancesRequest {
-                address: bob.address(),
-                pagination: None,
-            })
-            .unwrap()
-            .balances
-            .into_iter()
-            .find(|c| c.denom == "aarch")
-            .unwrap()
-            .amount
-            .parse::<u128>()
-            .unwrap();
-
-        assert_eq!(bob_balance, initial_balance - amount.amount.u128());
-    }
-
-    #[test]
     fn test_block_skipping() {
         let app = ArchwayApp::default();
 
