@@ -117,7 +117,7 @@ impl ArchwayApp {
 
     pub fn increase_time(&self, seconds: u64) {
         unsafe {
-            IncreaseTime(self.id, seconds.try_into().unwrap());
+            IncreaseTime(self.id, seconds);
         }
     }
 
@@ -397,7 +397,11 @@ impl<'a> Runner<'a> for ArchwayApp {
             let res = ResponseFinalizeBlock::decode(res.as_slice())
                 .map_err(DecodeError::ProtoDecodeError)?;
 
-            let tx_result = res.tx_results.get(0).cloned().expect("tx_result not found");
+            let tx_result = res
+                .tx_results
+                .first()
+                .cloned()
+                .expect("tx_result not found");
 
             if !tx_result.codespace.is_empty() {
                 return Err(RunnerError::ExecuteError {
