@@ -5,7 +5,7 @@ use archway_proto::cosmos::gov::v1beta1::{
     MsgSubmitProposal, MsgSubmitProposalResponse, MsgVote, MsgVoteResponse, QueryParamsRequest,
     QueryParamsResponse, QueryProposalRequest, QueryProposalResponse, VoteOption,
 };
-use pbjson_types::Any;
+use archway_proto::tendermint::google::protobuf::Any;
 use test_tube::{fn_execute, fn_query, Account, RunnerError, RunnerExecuteResult, SigningAccount};
 
 use crate::module::type_url;
@@ -57,8 +57,7 @@ where
                     type_url: type_url(&msg_type_url),
                     value: msg
                         .to_bytes()
-                        .map_err(|e| RunnerError::EncodeError(e.into()))?
-                        .into(),
+                        .map_err(|e| RunnerError::EncodeError(e.into()))?,
                 }),
                 initial_deposit: initial_deposit
                     .into_iter()
@@ -117,8 +116,7 @@ impl<'a> GovWithAppAccess<'a> {
                     type_url: format!("/{}", msg_type_url),
                     value: msg
                         .to_bytes()
-                        .map_err(|e| RunnerError::EncodeError(e.into()))?
-                        .into(),
+                        .map_err(|e| RunnerError::EncodeError(e.into()))?,
                 }),
                 initial_deposit: min_deposit,
                 proposer,

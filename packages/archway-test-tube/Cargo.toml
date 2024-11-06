@@ -11,8 +11,9 @@ wasm-sudo = ["test-tube/wasm-sudo"]
 
 [dependencies]
 #test-tube = { version = "0.8.0" }
+# Working on newest version
 test-tube = { git = "https://github.com/osmosis-labs/test-tube.git", rev = "9688c23" }
-archway-proto = { git = "https://github.com/archway-network/arch3.rs.git", branch = "feature/dependency-bump" }
+archway-proto = { git = "https://github.com/archway-network/arch3.rs.git", branch = "fix/abstract-any-proto-encoding-fix" }
 pbjson-types = "0.7.0"
 prost-types = "0.13.3"
 cosmwasm-std = { version = "2.1", features = ["stargate"] }
