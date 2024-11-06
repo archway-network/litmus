@@ -1,0 +1,2 @@
+45e8a3d5f3fb7c5502178ffb306005e7e37e5dd476aaeb7d17e0b6d9d7cec106  demo_contract.wasm
+ca4a5ec2b18e6a15b554fcb4a495562087ab04d54c5531db2ecceb5b76c5da9d  ica_demo.wasm
