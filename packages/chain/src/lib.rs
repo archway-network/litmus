@@ -2,12 +2,9 @@ mod bindings;
 pub mod module;
 
 pub use archway_proto;
-use archway_proto::tendermint::abci::ExecTxResult;
 use cosmrs::proto::tendermint::abci::ResponseFinalizeBlock;
 use std::ffi::CString;
 use std::str::FromStr;
-
-// TODO: add a with_module::<Wasm>(FnOnce(msg) -> Response) -> Response
 
 use crate::bindings::SkipBlock;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
@@ -21,7 +18,6 @@ use test_tube::bindings::{
     GetValidatorPrivateKey, IncreaseTime, InitAccount, InitTestEnv, Query, Simulate,
 };
 use test_tube::cosmrs::crypto::secp256k1::SigningKey;
-use test_tube::cosmrs::proto::tendermint::v0_37::abci::{Event, EventAttribute, ResponseDeliverTx};
 use test_tube::cosmrs::tx::{Fee, SignerInfo};
 use test_tube::cosmrs::{tx, AccountId};
 use test_tube::runner::error::DecodeError;
@@ -46,38 +42,6 @@ pub fn aarch(amount: u128) -> Coin {
 
 pub fn arch(amount: u128) -> Coin {
     aarch(amount * 10u128.pow(18))
-}
-
-fn convert_to_response_deliver_tx(res: ExecTxResult) -> ResponseDeliverTx {
-    let mut events = Vec::with_capacity(res.events.len());
-
-    for event in res.events {
-        let mut attrs = Vec::with_capacity(event.attributes.len());
-
-        for attr in event.attributes {
-            attrs.push(EventAttribute {
-                key: attr.key,
-                value: attr.value,
-                index: attr.index,
-            })
-        }
-
-        events.push(Event {
-            r#type: event.r#type.clone(),
-            attributes: attrs,
-        })
-    }
-
-    ResponseDeliverTx {
-        code: res.code,
-        data: res.data,
-        log: res.log,
-        info: res.info,
-        gas_wanted: res.gas_wanted,
-        gas_used: res.gas_used,
-        events,
-        codespace: res.codespace,
-    }
 }
 
 pub struct ArchwayApp {
@@ -441,13 +405,12 @@ mod tests {
     use cosmwasm_schema::cw_serde;
     use std::option::Option::None;
 
-    use archway_proto::cosmos::bank::v1beta1::QueryAllBalancesRequest;
     use cosmwasm_std::{coins, Coin};
     use serde::Serialize;
 
-    use crate::module::{Bank, Wasm};
+    use crate::module::Wasm;
     use crate::{arch, ArchwayApp};
-    use test_tube::account::{Account, FeeSetting};
+    use test_tube::account::Account;
     use test_tube::module::Module;
 
     pub mod netwars_msgs {

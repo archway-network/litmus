@@ -3,7 +3,7 @@ use crate::harness::graph_builder::{Graph, Storage};
 use crate::job::Job;
 use crate::naming::NameType;
 use crate::results::FinalizedGroup;
-use archway_test_tube::ArchwayApp;
+use litmus_chain::ArchwayApp;
 use tokio::runtime::Builder;
 
 pub struct HarnessRuntime {

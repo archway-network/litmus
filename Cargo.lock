@@ -92,24 +92,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "archway_test_tube"
-version = "0.1.0"
-dependencies = [
- "archway-proto",
- "base64 0.22.1",
- "bindgen",
- "cosmwasm-schema 2.1.4",
- "cosmwasm-std 2.1.4",
- "cw1-whitelist",
- "pbjson-types",
- "prost",
- "prost-types",
- "serde",
- "serde_json",
- "test-tube",
-]
-
-[[package]]
 name = "ark-bls12-381"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1149,20 +1131,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ecometer"
-version = "0.1.0"
-dependencies = [
- "archway_test_tube",
- "console",
- "cosmwasm-std 2.1.4",
- "indicatif",
- "plotters",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "ed25519"
 version = "2.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2197,6 +2165,38 @@ name = "litemap"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "643cb0b8d4fcc284004d5fd0d67ccf61dfffadb7f75e1e71bc420f4688a3a704"
+
+[[package]]
+name = "litmus_chain"
+version = "0.1.0"
+dependencies = [
+ "archway-proto",
+ "base64 0.22.1",
+ "bindgen",
+ "cosmwasm-schema 2.1.4",
+ "cosmwasm-std 2.1.4",
+ "cw1-whitelist",
+ "pbjson-types",
+ "prost",
+ "prost-types",
+ "serde",
+ "serde_json",
+ "test-tube",
+]
+
+[[package]]
+name = "litmus_meter"
+version = "0.1.0"
+dependencies = [
+ "console",
+ "cosmwasm-std 2.1.4",
+ "indicatif",
+ "litmus_chain",
+ "plotters",
+ "serde",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "log"

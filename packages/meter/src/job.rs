@@ -1,10 +1,10 @@
 use crate::naming::Naming;
 use crate::results::{BenchResult, BenchResults, Gas};
-use archway_test_tube::archway_proto::cosmos::bank::v1beta1::QueryBalanceRequest;
-use archway_test_tube::module::{Bank, Module, Wasm};
-use archway_test_tube::test_tube::{Account, SigningAccount};
-use archway_test_tube::{ArchwayApp, FEE_DENOM};
 use cosmwasm_std::Coin;
+use litmus_chain::archway_proto::cosmos::bank::v1beta1::QueryBalanceRequest;
+use litmus_chain::module::{Bank, Module, Wasm};
+use litmus_chain::test_tube::{Account, SigningAccount};
+use litmus_chain::{ArchwayApp, FEE_DENOM};
 use serde::Serialize;
 use std::sync::Arc;
 
