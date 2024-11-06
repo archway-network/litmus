@@ -3,7 +3,7 @@ use crate::harness::graph_builder::{GenericStorage, Graph, LinearGraph, Storage}
 use crate::harness::HarnessRuntime;
 use crate::job::{Continuous, Independent, Job, Setup};
 use crate::naming::{NameType, Naming};
-use archway_test_tube::ArchwayApp;
+use litmus_chain::ArchwayApp;
 use serde::Serialize;
 use tokio::runtime::Builder;
 

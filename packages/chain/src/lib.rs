@@ -441,13 +441,12 @@ mod tests {
     use cosmwasm_schema::cw_serde;
     use std::option::Option::None;
 
-    use archway_proto::cosmos::bank::v1beta1::QueryAllBalancesRequest;
     use cosmwasm_std::{coins, Coin};
     use serde::Serialize;
 
-    use crate::module::{Bank, Wasm};
+    use crate::module::Wasm;
     use crate::{arch, ArchwayApp};
-    use test_tube::account::{Account, FeeSetting};
+    use test_tube::account::Account;
     use test_tube::module::Module;
 
     pub mod netwars_msgs {
