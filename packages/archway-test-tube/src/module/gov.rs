@@ -5,7 +5,7 @@ use archway_proto::cosmos::gov::v1beta1::{
     MsgSubmitProposal, MsgSubmitProposalResponse, MsgVote, MsgVoteResponse, QueryParamsRequest,
     QueryParamsResponse, QueryProposalRequest, QueryProposalResponse, VoteOption,
 };
-use pbjson_types::Any;
+use archway_proto::tendermint::google::protobuf::Any;
 use test_tube::{fn_execute, fn_query, Account, RunnerError, RunnerExecuteResult, SigningAccount};
 
 use crate::module::type_url;
