@@ -53,4 +53,4 @@ cw2 = "1.1.0"
 schemars = "0.8.12"
 serde = { version = "1.0.183", default-features = false, features = ["derive"] }
 thiserror = "1.0.44"
-archway-proto = { git = "https://github.com/archway-network/arch3.rs.git", branch = "fix/abstract-any-proto-encoding-fix", default-features = false, features = ["cosmwasm", "abstract-any"] }
+archway-proto = { git = "https://github.com/archway-network/arch3.rs.git", branch = "fix/abstract-any-proto-encoding-fix", default-features = false, features = ["abstract-any"] }
