@@ -1,7 +1,7 @@
 use archway_proto::archway::callback::v1::{
     MsgCancelCallback, MsgCancelCallbackResponse, MsgRequestCallback, MsgRequestCallbackResponse,
     QueryCallbacksRequest, QueryCallbacksResponse, QueryEstimateCallbackFeesRequest,
-    QueryEstimateCallbackFeesResponse,
+    QueryEstimateCallbackFeesResponse, QueryParamsRequest, QueryParamsResponse,
 };
 use test_tube::{fn_execute, fn_query, Module, Runner};
 
@@ -33,5 +33,9 @@ where
 
     fn_query! {
         pub query_callbacks ["/archway.callback.v1.Query/Callbacks"]: QueryCallbacksRequest => QueryCallbacksResponse
+    }
+
+    fn_query! {
+        pub query_params ["/archway.callback.v1.Query/Params"]: QueryParamsRequest => QueryParamsResponse
     }
 }
