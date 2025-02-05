@@ -1,14 +1,17 @@
 mod bindings;
+mod coin_compat;
 pub mod module;
 
 pub use archway_proto;
 use cosmrs::proto::tendermint::abci::ResponseFinalizeBlock;
+pub use cosmwasm_std;
 use std::ffi::CString;
 use std::str::FromStr;
 
 use crate::bindings::SkipBlock;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
+pub use coin_compat::*;
 use cosmrs::Any;
 use cosmwasm_std::Coin;
 use prost::Message;
@@ -402,14 +405,15 @@ impl<'a> Runner<'a> for ArchwayApp {
 
 #[cfg(test)]
 mod tests {
+    use crate::module::{Authz, Distribution, Staking, Wasm};
+    use crate::{arch, to_proto, ArchwayApp};
+    use archway_proto::cosmos::distribution::v1beta1::MsgWithdrawDelegatorReward;
+    use archway_proto::cosmos::staking::v1beta1::{AuthorizationType, MsgDelegate};
     use cosmwasm_schema::cw_serde;
-    use std::option::Option::None;
-
     use cosmwasm_std::{coins, Coin};
+    use prost::Name;
     use serde::Serialize;
-
-    use crate::module::Wasm;
-    use crate::{arch, ArchwayApp};
+    use std::option::Option::None;
     use test_tube::account::Account;
     use test_tube::module::Module;
 
@@ -642,6 +646,35 @@ mod tests {
     }
 
     #[test]
+    fn test_authz() {
+        let app = ArchwayApp::default();
+        let accounts = app.init_accounts(&[arch(100)], 2).unwrap();
+        let grantee = accounts.get(0).unwrap();
+        let granter = accounts.get(1).unwrap();
+
+        let authz = Authz::new(&app);
+        authz
+            .grant_generic(
+                &granter,
+                grantee.address(),
+                MsgWithdrawDelegatorReward::type_url(),
+                None,
+            )
+            .unwrap();
+
+        authz
+            .grant_stake(
+                &granter,
+                grantee.address(),
+                AuthorizationType::Delegate,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+    }
+
+    #[test]
     fn test_block_skipping() {
         let app = ArchwayApp::default();
 
@@ -654,5 +687,58 @@ mod tests {
         app.skip_blocks(5);
 
         assert_eq!(app.get_block_height(), 7i64);
+    }
+
+    #[test]
+    fn test_delegating() {
+        let app = ArchwayApp::default();
+        let staking = Staking::new(&app);
+
+        // let validator = app.get_first_validator_signing_account().unwrap();
+        let vals = staking.validators(None, None).unwrap();
+        let validator = vals.validators.first().unwrap().to_owned();
+        let validator_addr = validator.operator_address;
+        dbg!(&validator.delegator_shares);
+        let delegator = app.init_account(&[arch(100)]).unwrap();
+
+        let delegation = arch(10);
+        staking
+            .delegate(
+                MsgDelegate {
+                    delegator_address: delegator.address(),
+                    validator_address: validator_addr.clone(),
+                    amount: Some(to_proto(&delegation)),
+                },
+                &delegator,
+            )
+            .unwrap();
+
+        let res = staking
+            .delegation(delegator.address(), validator_addr.clone())
+            .unwrap()
+            .delegation_response
+            .unwrap()
+            .balance
+            .unwrap()
+            .amount
+            .parse::<u128>()
+            .unwrap();
+        assert_eq!(res, delegation.amount.u128());
+
+        app.skip_blocks(1000);
+
+        let distribution = Distribution::new(&app);
+        let res = distribution
+            .delegation_rewards(delegator.address(), validator_addr)
+            .unwrap();
+        dbg!(&res);
+        let vals = staking
+            .validators(None, None)
+            .unwrap()
+            .validators
+            .first()
+            .unwrap()
+            .to_owned();
+        dbg!(&vals.delegator_shares);
     }
 }

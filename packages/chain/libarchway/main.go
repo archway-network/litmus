@@ -480,5 +480,11 @@ func encodeBytesResultBytes(bytes []byte) *C.char {
 	return C.CString(result.EncodeResultFromOk(bytes))
 }
 
+func requireNoErr(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
 // must define main for ffi build
 func main() {}

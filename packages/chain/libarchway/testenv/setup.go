@@ -22,6 +22,8 @@ import (
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	banktestutil "github.com/cosmos/cosmos-sdk/x/bank/testutil"
+	distributiontypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
+	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
@@ -75,16 +77,19 @@ func GenesisStateWithValSet(appInstance *app.ArchwayApp) (app.GenesisState, secp
 		pk, _ := cryptocodec.FromTmPubKeyInterface(val.PubKey)
 		pkAny, _ := codectypes.NewAnyWithValue(pk)
 		validator := stakingtypes.Validator{
-			OperatorAddress:   sdk.ValAddress(val.Address).String(),
-			ConsensusPubkey:   pkAny,
-			Jailed:            false,
-			Status:            stakingtypes.Bonded,
-			Tokens:            bondAmt,
-			DelegatorShares:   sdkmath.LegacyOneDec(),
-			Description:       stakingtypes.Description{},
-			UnbondingHeight:   int64(0),
-			UnbondingTime:     time.Unix(0, 0).UTC(),
-			Commission:        stakingtypes.NewCommission(sdkmath.LegacyZeroDec(), sdkmath.LegacyZeroDec(), sdkmath.LegacyZeroDec()),
+			OperatorAddress: sdk.ValAddress(val.Address).String(),
+			ConsensusPubkey: pkAny,
+			Jailed:          false,
+			Status:          stakingtypes.Bonded,
+			Tokens:          bondAmt,
+			DelegatorShares: sdkmath.LegacyOneDec(),
+			Description:     stakingtypes.Description{},
+			UnbondingHeight: int64(0),
+			UnbondingTime:   time.Unix(0, 0).UTC(),
+			Commission: stakingtypes.NewCommission(sdkmath.LegacyNewDecWithPrec(5, 2), // 5% rate
+				sdkmath.LegacyNewDecWithPrec(20, 2), // 20% max rate
+				sdkmath.LegacyNewDecWithPrec(1, 2),  // 1% max change rate
+			),
 			MinSelfDelegation: sdkmath.ZeroInt(),
 		}
 		validators = append(validators, validator)
@@ -100,6 +105,27 @@ func GenesisStateWithValSet(appInstance *app.ArchwayApp) (app.GenesisState, secp
 	// set validators and delegations
 	stakingGenesis := stakingtypes.NewGenesisState(stakingtypes.DefaultParams(), validators, delegations)
 	genesisState[stakingtypes.ModuleName] = appInstance.AppCodec().MustMarshalJSON(stakingGenesis)
+
+	// Set rewards
+	mintGenesis := minttypes.NewGenesisState(minttypes.DefaultInitialMinter(), minttypes.DefaultParams())
+	mintGenesis.Params.MintDenom = "aarch"
+	mintGenesis.Params.InflationMin = sdkmath.LegacyNewDecWithPrec(7, 2)         // 7%
+	mintGenesis.Params.InflationMax = sdkmath.LegacyNewDecWithPrec(20, 2)        // 20%
+	mintGenesis.Params.InflationRateChange = sdkmath.LegacyNewDecWithPrec(13, 2) // 13%
+	mintGenesis.Params.GoalBonded = sdkmath.LegacyNewDecWithPrec(67, 2)          // 67%
+	mintGenesis.Minter.Inflation = sdkmath.LegacyNewDecWithPrec(13, 2)           // 13%
+	mintGenesis.Minter.AnnualProvisions = sdkmath.LegacyNewDec(0)
+	genesisState[minttypes.ModuleName] = appInstance.AppCodec().MustMarshalJSON(mintGenesis)
+
+	// Set distribution just in case
+	distributionGenesis := distributiontypes.DefaultGenesisState()
+	distributionGenesis.Params = distributiontypes.Params{
+		CommunityTax:        sdkmath.LegacyNewDecWithPrec(2, 2), // 2%
+		BaseProposerReward:  sdkmath.LegacyNewDecWithPrec(1, 2), // 1%
+		BonusProposerReward: sdkmath.LegacyNewDecWithPrec(4, 2), // 4%
+		WithdrawAddrEnabled: true,
+	}
+	genesisState[distributiontypes.ModuleName] = appInstance.AppCodec().MustMarshalJSON(distributionGenesis)
 
 	totalSupply := sdk.NewCoins()
 	for _, b := range balances {

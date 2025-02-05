@@ -3,7 +3,7 @@ use archway_proto::cosmos::bank::v1beta1::{
     QueryBalanceRequest, QueryBalanceResponse, QueryDenomsMetadataRequest,
     QueryDenomsMetadataResponse, QueryTotalSupplyRequest, QueryTotalSupplyResponse,
 };
-use test_tube::{fn_execute, fn_query, Module, Runner};
+use test_tube::{fn_execute, fn_query, Module, Runner, RunnerResult};
 
 pub struct Bank<'a, R: Runner<'a>> {
     runner: &'a R,
@@ -37,5 +37,16 @@ where
 
     fn_query! {
         pub query_denoms_metadata ["/cosmos.bank.v1beta1.Query/DenomsMetadata"]: QueryDenomsMetadataRequest => QueryDenomsMetadataResponse
+    }
+
+    pub fn balance(
+        &self,
+        address: impl Into<String>,
+        denom: impl Into<String>,
+    ) -> RunnerResult<QueryBalanceResponse> {
+        self.query_balance(&QueryBalanceRequest {
+            address: address.into(),
+            denom: denom.into(),
+        })
     }
 }

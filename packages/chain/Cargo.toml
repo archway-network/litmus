@@ -13,10 +13,13 @@ wasm-sudo = ["test-tube/wasm-sudo"]
 #test-tube = { version = "0.8.0" }
 # Working on newest version
 test-tube = { git = "https://github.com/osmosis-labs/test-tube.git", rev = "9688c23" }
-archway-proto = { git = "https://github.com/archway-network/arch3.rs.git", branch = "fix/abstract-any-proto-encoding-fix" }
+archway-proto = { version = "0.2.1" }
 pbjson-types = "0.7.0"
 prost-types = "0.13.3"
 cosmwasm-std = { version = "2.1", features = ["stargate"] }
+# Used for conversion for coin
+cosmwasm-std-legacy = { version = "1.5.5", package = "cosmwasm-std" }
+
 prost = "0.13.3"
 serde = "1.0"
 serde_json = "1.0"
